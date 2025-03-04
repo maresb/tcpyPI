@@ -292,12 +292,10 @@ def decompose_pi(pi,sstk,t0,CKCD=0.9):
         tuple: (lnpi, lneff, lndiseq, lnCKCD)
         
     Examples:
-        >>> result = decompose_pi(70, 300, 200, 0.9)
-        >>> [x for x in result]
-        [8.496..., -0.693..., 9.295..., -0.105...]
-        >>> result = decompose_pi(50, 295, 210, 0.9)
-        >>> [x for x in result]
-        [7.824..., -0.904..., 8.833..., -0.105...]
+        >>> decompose_pi(70, 300, 200, 0.9)
+        (8.496..., -0.693..., 9.295..., -0.105...)
+        >>> decompose_pi(50, 295, 210, 0.9)
+        (7.824..., -0.904..., 8.833..., -0.105...)
 
     Exceptional cases:
         - Efficiency is non-positive
