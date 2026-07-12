@@ -105,7 +105,9 @@ the terminal level between $750$ and $350\hPa$, dragging $287\Jkg$ of
 intervening negative area into a signed integral that is then clamped at
 zero: eyewall CAPE flips between $224.23\Jkg$ and $0$.  The saturated CAPE,
 outflow temperature, and outflow level are smooth there --- the discontinuity
-is not in the outflow calculation and not a quadrature error.
+is not in the outflow calculation and not a quadrature error.  The rule is
+inherited verbatim from Emanuel's \texttt{pc\_min.m}: this is a defect of
+the reference algorithm itself, not of the Python port.
 \item \textbf{The same mechanism explains the historical 1995 failure}
 (cycle $961.017\leftrightarrow961.671\hPa$, triggered by the $400\hPa$
 sample; eyewall CAPE flips $0\leftrightarrow203\Jkg$), while an adjacent-day
@@ -281,6 +283,18 @@ piecewise-linear $b$ (or the profile top if $b_N>0$).  The clamp
 $\max(\,\cdot\,,0)$ turns a possibly negative signed integral into $0$;
 it \emph{is} reachable here, and is half of the issue-77 mechanism.
 \end{convention}
+
+To be clear about provenance: Convention~\ref{conv:top} is \emph{not} a
+porting divergence.  The selector, the clamp, and every formula above are
+inherited line-for-line from Emanuel's \texttt{pc\_min.m} (whose comment
+reads ``Find maximum level of positive buoyancy, INB''), translated
+verbatim in the very first \texttt{pyPI} commit (April 2020) and never
+altered since.  Neither the CAPE definition of Emanuel (1994,
+Eq.~6.3.6) nor Bister and Emanuel (2002) specifies a rule for profiles
+with multiple buoyant layers \cite{emanuel1994,bisteremanuel2002}; the
+topmost-positive-node selection is an undocumented implementation choice
+of the reference code, which the Python port faithfully reproduces ---
+including its discontinuity.
 
 Pointwise, $\Etop \le \Emax$ and $\Ereach\le\Emax$:
 Convention~\ref{conv:top} evaluates $W$ at one particular candidate,
