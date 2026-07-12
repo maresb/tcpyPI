@@ -61,7 +61,7 @@ def cobweb(ax, xs, color=INK2, lw=0.8, zorder=5, arrow_last=False):
         ax.plot([x0, x1], [x1, x1], color=color, lw=lw, zorder=zorder, alpha=0.85)
 
 
-def plot_map_with_jumps(ax, pm, g, jump_thresh=0.1):
+def plot_map_with_jumps(ax, pm, g, jump_thresh=0.1, color=BLUE, **kw):
     """Plot g with NaN breaks at jumps so no vertical connector is drawn."""
     gg = g.copy()
     br = np.where(np.abs(np.diff(g)) > jump_thresh)[0]
@@ -70,7 +70,8 @@ def plot_map_with_jumps(ax, pm, g, jump_thresh=0.1):
     for q in br:
         gplot = np.insert(gplot, q + 1, np.nan)
         pmp = np.insert(pmp, q + 1, np.nan)
-    ax.plot(pmp, gplot, color=BLUE, lw=1.4, zorder=4)
+    ax.plot(pmp, gplot, color=color, lw=kw.pop("lw", 1.4),
+            zorder=kw.pop("zorder", 4), **kw)
     return br
 
 
@@ -374,20 +375,21 @@ plt.close(fig)
 fig, axs = plt.subplots(1, 2, figsize=(8.4, 3.3))
 ax = axs[0]
 m = (D["a_pm"] > 949.5) & (D["a_pm"] < 953)
-plot_map_with_jumps(ax, D["a_pm"][m], D["a_g"][m], jump_thresh=0.3)
+plot_map_with_jumps(ax, D["a_pm"][m], D["a_g"][m], jump_thresh=0.3, color=RED,
+                    lw=1.6, label=r"legacy map ($E_{\rm top}$ CAPE): gap, no fixed point")
 mf = (FX["pm"] > 949.5) & (FX["pm"] < 953)
-ax.plot(FX["pm"][mf], FX["g"][mf], color=AQUA, lw=1.7, label=r"$g$ with max-$W$ CAPE")
+ax.plot(FX["pm"][mf], FX["g"][mf], color=AQUA, lw=1.6, ls=(0, (4, 3)), zorder=6,
+        label=r"repaired map ($E_{\max}$ CAPE): continuous")
 ax.plot([949.5, 953], [949.5, 953], color=INK2, lw=0.8, ls="--")
 cobweb(ax, list(FX["iters"][2:]), color=INK, lw=0.9)
 xf = FX["iters"][-1]
-ax.plot(xf, xf, "o", color=AQUA, ms=6, zorder=8)
-ax.plot([], [], color=BLUE, lw=1.4, label=r"$g$ with pcmin CAPE")
+ax.plot(xf, xf, "o", color=AQUA, mec=INK, mew=0.6, ms=7, zorder=8)
 ax.set_xlim(949.9, 952.4)
 ax.set_ylim(949.9, 952.4)
 ax.set_xlabel(r"$x = P_M$ [hPa]")
 ax.set_ylabel(r"$g(x)$ [hPa]")
-ax.set_title("(a) continuous CAPE closes the gap;\nfixed point exists, 5 iterations")
-ax.legend(loc="upper right", fontsize=7.5)
+ax.set_title("(a) same map, one changed ingredient:\n$E_{\max}$ CAPE closes the gap")
+ax.legend(loc="upper left", fontsize=7.5)
 
 ax = axs[1]
 both1 = (A["IFL"] == 1) & (B["IFL"] == 1)
