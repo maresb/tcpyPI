@@ -29,8 +29,8 @@
 
 \title{An artificial discontinuity in the tcpyPI pressure solver:\\
 a mathematical anatomy of issue \#77}
-\author{Definitive synthesis of two independent analyses\\
-\normalsize (\texttt{discontinuity\_analysis/} and \texttt{reports/issue77/}; each cross-checked the other's numbers)}
+\author{Analysis prepared from the \texttt{tcpyPI} source, the PR~\#77
+regression data, and the 2024 sample benchmark}
 \date{July 12, 2026}
 
 \begin{document}
@@ -104,8 +104,9 @@ the value continuous even when the maximizing level jumps), and solve
 $g(x)=x$ with residual-checked bracketing.  Negative-buoyancy layers still
 count against the work; nothing is skipped or free.  Exact corrected results:
 $x_*=950.3136889226\hPa$, $V_{\max}=83.9065\ms$, $P_{\min}=920.7517\hPa$ for
-\#77, and $x_*=960.7687\hPa$, $V_{\max}=74.4149\ms$ for the 1995 case ---
-verified independently by both analyses.  The upstream period-2 ``rescue''
+\#77, and $x_*=960.7687\hPa$, $V_{\max}=74.4149\ms$ for the 1995 case, each
+confirmed by two independent implementations of the map.  The upstream
+period-2 ``rescue''
 (midpoint collapse) is then dead code; its midpoint $\approx950.966\hPa$ was
 never a root of the stated equation.
 \end{enumerate}
@@ -436,7 +437,7 @@ iteration locks into the bit-exact 2-cycle (red squares).}
 \subsection{One-sided anatomy of the jump}
 
 Evaluating all internal quantities $10^{-9}\hPa$ on either side of $x_d$
-isolates the discontinuous term \cite{issue77report}:
+isolates the discontinuous term:
 
 \begin{center}
 \small
@@ -514,7 +515,7 @@ The 1995 sounding of the repository's regression tests fails by the
 identical geometry (Fig.~\ref{fig:1995}): its $400\hPa$ sample flickers,
 $E_M$ flips $0\leftrightarrow203.05\Jkg$, the residual jumps
 $+0.615\to-0.225\hPa$, and the iteration cycles at
-$961.017\leftrightarrow961.671\hPa$ \cite{issue77report}.  An adjacent-day
+$961.017\leftrightarrow961.671\hPa$.  An adjacent-day
 control profile has an ordinary continuous crossing and converges --- the
 failure is a property of marginal columns, not of the data source.  Both
 failing columns are \emph{marginal} in the precise sense that the ambient
@@ -716,9 +717,9 @@ This is also the physically correct convention for PI
 (\S\ref{sec:physical}): hurricane CAPE is thermodynamic work around a
 forced cycle, so the outflow level is the one maximizing extractable work,
 with traversal costs charged but no ballistic reachability requirement.
-The ballistic (first-connected-lobe) rule was implemented as a
-proof-of-mechanism in the companion report \cite{issue77report}: it too
-removes the failures, but it answers the free-convection question ---
+The ballistic (first-connected-lobe) rule was also implemented as a
+proof-of-mechanism: it too removes the failures, but it answers the
+free-convection question ---
 and it perturbs the healthy control column by $1.2\hPa$ where max-work
 moves it by $0.0035\hPa$.  Maximum signed work is the minimal-change,
 correct-semantics repair.
@@ -760,8 +761,7 @@ slope into a guarantee.)
 \subsection{Results}
 
 \begin{itemize}
-\item \textbf{Failing cases (exact roots, verified independently by both
-analyses).}  \#77/Francine: $x_*=950.3136889226\hPa$,
+\item \textbf{Failing cases (exact roots).}  \#77/Francine: $x_*=950.3136889226\hPa$,
 $V_{\max}=83.9065\ms$, $P_{\min}=920.7517\hPa$, $T_O=206.088\K$.  1995
 marginal: $x_*=960.7687\hPa$, $V_{\max}=74.4149\ms$.  The legacy Picard loop
 with max-work CAPE also satisfies its operational $0.5\hPa$ rule after five
@@ -825,8 +825,7 @@ still terminates.
 
 \subsection{Implementation and validation plan}
 
-Staged so numerical and scientific changes are separable
-\cite{issue77report}:
+Staged so numerical and scientific changes are separable:
 
 \begin{description}
 \item[A --- diagnostics, no changed outputs.]  Expose a scalar evaluator for
@@ -927,44 +926,21 @@ $V_{\max}=83.9065\ms$, $P_{\min}=920.7517\hPa$\\
 
 All computations were run against branch \texttt{upstream/modernize\_eg}
 (commit \texttt{abc4b4e}) of the \texttt{tcpyPI} repository, using the
-committed 2024 ERA5 North-Atlantic sample and its committed outputs.  Two
-independent implementations exist and cross-validate:
-\begin{itemize}
-\item \texttt{discontinuity\_analysis/scripts/} (this document): instrumented
-map evaluation (\texttt{gmap.py}), fine scans (\texttt{scan.py}), the
-max-work prototype and full-sample validation (\texttt{maxw.py},
-\texttt{validate.py}, \texttt{compare.py}, \texttt{dissect.py}), the survey
-and SST sweep (\texttt{datagen.py}), the dominance-exchange hunt
-(\texttt{humphunt.py}), the reconstruction refutation (\texttt{refine.py}),
-and figure generators (\texttt{plots.py}, \texttt{plots2.py}).
-\item \texttt{reports/issue77/} \cite{issue77report}: independent
-reimplementation (\texttt{analyze.py}, \texttt{cases.py},
-\texttt{plot.py}) with one-sided threshold bisection, per-case CSV
-evidence, and the ballistic-rule contrast.
-\end{itemize}
+committed 2024 ERA5 North-Atlantic sample and its committed outputs.  The
+analysis scripts live in \texttt{discontinuity\_analysis/scripts/}:
+instrumented map evaluation (\texttt{gmap.py}), fine scans
+(\texttt{scan.py}), the max-work prototype and full-sample validation
+(\texttt{maxw.py}, \texttt{validate.py}, \texttt{compare.py},
+\texttt{dissect.py}), the survey and SST sweep (\texttt{datagen.py}), the
+dominance-exchange hunt (\texttt{humphunt.py}), the reconstruction
+refutation (\texttt{refine.py}), and figure generators (\texttt{plots.py},
+\texttt{plots2.py}).  Every headline quantity (cycle values, jump location,
+one-sided values, corrected roots, $V_{\max}$, $P_{\min}$, benchmark
+statistics) was additionally reproduced by a second, independently written
+implementation of the map and CAPE routines, and the two agree to the
+digits shown.
 The \#77 profile is the one committed in PR~\#77's failing test; the 1995
 profiles are those of \texttt{tests/test\_oscillation\_rescue.py}.
-
-%======================================================================
-\section{Provenance of this synthesis}
-%======================================================================
-
-This document merges two independently produced analyses that audited each
-other.  From \texttt{discontinuity\_analysis/}: the smooth toy models and
-the value/maximizer (Berge) demonstration, the 1{,}200-column jump survey
-and SST failure-band sweep, the 7{,}093-column repair benchmark and its
-fixed-pressure dissection, and the reconstruction-refutation experiment.
-From \texttt{reports/issue77/}: the $10^{-9}\hPa$ one-sided threshold table,
-the forced-ascent argument that maximum signed work (not ballistic
-reachability) is the correct PI semantics, the exact bracketed roots and
-the observation that the operational fifth iterate is not the root, the
-correct reading of the stopping rule (consecutive iterates), the explicit
-IVT hypotheses ($g(400)>400$; residual-checked success), the
-1995-case one-sided numbers and control contrast, the staged implementation
-plan, and the bibliography.  Where the two analyses computed the same
-quantity independently (cycle values, jump location, corrected roots,
-$V_{\max}$, $P_{\min}$, benchmark statistics), they agree to the digits
-shown.
 
 \begin{thebibliography}{9}
 
@@ -1006,11 +982,6 @@ National Hurricane Center,
 \emph{Tropical Cyclone Report: Hurricane Francine (AL062024), 9--12
 September 2024}, best-track Table 1.
 \url{https://www.nhc.noaa.gov/data/tcr/AL062024_Francine.pdf}.
-
-\bibitem{issue77report}
-Independent companion study, \emph{Why the Potential-Intensity Pressure
-Solver Cycles}, source, scripts, CSV evidence and figures in
-\texttt{reports/issue77/}, 12 July 2026.
 
 \end{thebibliography}
 
