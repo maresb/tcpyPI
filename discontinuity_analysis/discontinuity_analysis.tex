@@ -6,9 +6,22 @@
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{microtype}
+\usepackage{array}
 \usepackage[dvipsnames]{xcolor}
 \usepackage[colorlinks=true,linkcolor=MidnightBlue,citecolor=MidnightBlue,urlcolor=MidnightBlue]{hyperref}
+% TeX Live 2025's microtype 3.2a warns `Command \showhyphens has changed'
+% against this kernel even in an empty document.  Mute the kernel warning
+% during microtype's begin-document check only (hooks run in registration
+% order: mute -> microtype's check -> restore).
+\makeatletter
+\AddToHook{begindocument/before}{\let\ma@saved@warning\@latex@warning@no@line
+  \let\@latex@warning@no@line\@gobble}
+\makeatother
+\usepackage{microtype}
+\makeatletter
+\AddToHook{begindocument}{\let\@latex@warning@no@line\ma@saved@warning}
+\makeatother
+\emergencystretch=1.5em
 
 \graphicspath{{figures/}}
 
@@ -29,8 +42,8 @@
 
 \title{An artificial discontinuity in the tcpyPI pressure solver:\\
 a mathematical anatomy of issue \#77}
-\author{Analysis prepared from the \texttt{tcpyPI} source, the PR~\#77
-regression data, and the 2024 sample benchmark}
+\author{Analysis prepared from the \texttt{tcpyPI} source,\\
+the PR~\#77 regression data, and the 2024 sample benchmark}
 \date{July 12, 2026}
 
 \begin{document}
@@ -81,7 +94,7 @@ $A=950.653345443832$ and $B=951.279007983853\hPa$; the separation
 ($0.626\hPa$) exceeds the $0.5\hPa$ stopping tolerance forever.  Raising the
 iteration cap cannot help.
 \item \textbf{No fixed point exists.}  The map $g$ jumps downward by
-$0.837\hPa$ at $x_d\simeq950.8289947515\hPa$; the residual $g(x)-x$ passes
+$0.837\hPa$ at $x_d\simeq950.829\hPa$; the residual $g(x)-x$ passes
 from $+0.507$ to $-0.331\hPa$ across the jump without taking the value zero.
 A sign-change search reports $x_d$, but that is the location of a jump, not
 a root.
@@ -248,24 +261,25 @@ candidate with $W(q_0)=0$, automatically $\Emax\ge0$; no clamping is needed.
 \end{convention}
 
 \begin{convention}[ballistic / reachable]\label{conv:reach}
-$\Ereach=\max\{W(q): q \text{ in the connected component of } \{W>0\}
-\text{ containing } q_0\}$.  A parcel starting \emph{at rest} converts work
+$\Ereach=\max\{W(q):q\in\mathcal R\}$, where $\mathcal R$ is the
+connected component of $\{W>0\}$ containing $q_0$.  A parcel starting
+\emph{at rest} converts work
 to kinetic energy and stalls where $W$ first returns to zero; $\Ereach$ is
 the best energy among levels such a parcel can reach unaided.
 \end{convention}
 
 \begin{convention}[topmost-positive-level --- the code's rule]\label{conv:top}
-Let $\mathrm{INB}=\max\{\,j : b_j>0\,\}$ (a \emph{grid} index).  Then
+Let $\mathrm{INB}=\max\{\,j : b_j>0\,\}$ (a \emph{grid} index).  The
+code integrates the signed work up to level $\mathrm{INB}$, adds the
+partial area up to the interpolated zero above it, and clamps the result at
+zero:
 \[
-\Etop=\max\Bigl(\,\text{signed integral up to level } \mathrm{INB}
-\text{ plus the partial area up to the interpolated zero above it},\ 0\Bigr),
+\Etop=\max\bigl(W(z_{\mathrm{top}}),\,0\bigr),
 \]
-where the outer $\max(\,\cdot\,,0)$ is the code's clamp of a possibly
-negative signed integral to zero --- this clamp \emph{is} reachable here,
-and is half of the issue-77 mechanism.
-Equivalently: $\Etop=\max\bigl(W(z_{\mathrm{top}}),\,0\bigr)$ where
-$z_{\mathrm{top}}$ is the topmost down-crossing of the piecewise-linear $b$
-(or the profile top if $b_N>0$).
+where $z_{\mathrm{top}}$ is the topmost down-crossing of the
+piecewise-linear $b$ (or the profile top if $b_N>0$).  The clamp
+$\max(\,\cdot\,,0)$ turns a possibly negative signed integral into $0$;
+it \emph{is} reachable here, and is half of the issue-77 mechanism.
 \end{convention}
 
 Pointwise, $\Etop \le \Emax$ and $\Ereach\le\Emax$:
@@ -331,11 +345,12 @@ enriches its moisture --- the ``eyewall parcel''), and $E_{MS}(x)$ (a parcel
 saturated at the SST at pressure $x$ --- the storm-core parcel, whose LNB
 also furnishes the outflow temperature $T_O(x)$).  These combine into
 \begin{equation}\label{eq:g}
-g(x) \;=\; \mathrm{MSL}\cdot
-\exp\!\Bigl(-\,\mathrm{CAT}(x)\,/\,\bigl(R_d\,\overline{T}_v(x)\bigr)\Bigr),
-\qquad
-\mathrm{CAT}(x)=\max\Bigl((E_M{-}E_A)+\tfrac12\,\kappa\,
+\begin{aligned}
+g(x) \;&=\; \mathrm{MSL}\cdot
+\exp\!\Bigl(-\,\mathrm{CAT}(x)\,/\,\bigl(R_d\,\overline{T}_v(x)\bigr)\Bigr),\\
+\mathrm{CAT}(x)\;&=\;\max\Bigl((E_M{-}E_A)+\tfrac12\,\kappa\,
 \tfrac{\mathrm{SST}}{T_O}\,(E_{MS}{-}E_M),\ 0\Bigr),
+\end{aligned}
 \end{equation}
 with $\kappa=C_k/C_D=0.9$ and $\overline{T}_v$ a smooth positive function of
 $x$.  The released code runs Picard iteration $x_{n+1}=g(x_n)$ from
@@ -713,7 +728,7 @@ fee for a room it never enters.
 
 \begin{center}
 \small
-\begin{tabular}{@{}p{0.30\linewidth}p{0.24\linewidth}p{0.36\linewidth}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.30\linewidth}>{\raggedright\arraybackslash}p{0.24\linewidth}>{\raggedright\arraybackslash}p{0.36\linewidth}@{}}
 \toprule
 feature & status & reason \\
 \midrule
@@ -926,17 +941,15 @@ declared tie convention.
 %======================================================================
 
 The causal chain, in full:
-\[
+\begin{align*}
 \text{marginal remote buoyancy pocket}
-\;\longrightarrow\; \text{hard highest-positive-node selector}
-\;\longrightarrow\; \text{finite CAPE jump (helped by the clamp)}
-\]
-\[
-\;\longrightarrow\; \text{pressure-map jump straddling the diagonal}
-\;\longrightarrow\; \text{attracting, bit-exact 2-cycle}
-\;\longrightarrow\; \text{``missing'' PI for a real hurricane's
-counterfactual}.
-\]
+&\;\longrightarrow\; \text{hard highest-positive-node selector}\\
+&\;\longrightarrow\; \text{finite CAPE jump (helped by the clamp)}\\
+&\;\longrightarrow\; \text{pressure-map jump straddling the diagonal}\\
+&\;\longrightarrow\; \text{attracting, bit-exact 2-cycle}\\
+&\;\longrightarrow\; \text{``missing'' PI for a real hurricane's
+counterfactual.}
+\end{align*}
 What is physical: multiple neutral levels, dominance exchanges between work
 maxima (maximizer jumps, value continuous), and barrier transitions in the
 free-convection problem.  What is conventional: calling the uppermost root
@@ -956,31 +969,33 @@ disappear for the right reason.
 %======================================================================
 
 \begin{center}
-\small
+\footnotesize
 \begin{tabular}{@{}ll@{}}
 \toprule
 quantity & value\\
 \midrule
-provenance & Hurricane Francine env., 18 UTC 2024-09-11, $28.6^{\circ}$N
+provenance & Francine env., 18 UTC 2024-09-11, $28.6^{\circ}$N
 $92.1^{\circ}$W, $\Delta\mathrm{SST}=-1.6\K$\\
 SST, MSL & $28.20263672^{\circ}$C, $1014.96545\hPa$\\
 levels (retained $>50\hPa$) & 37 (28)\\
-cycle & $A=950.6533454438$, $B=951.2790079839\hPa$ ($B{-}A=0.6257$)\\
+cycle $A$, $B$ & $950.6533454438$, $951.2790079839\hPa$
+($B{-}A=0.6257$)\\
 jump location, size & $x_d\simeq950.8289947515\hPa$, $0.837\hPa$ downward\\
 one-sided residuals at $x_d$ & $+0.5073447$ / $-0.3307594\hPa$\\
 slope of $g$ off the jump & $0.34$--$0.46$ (on $[946,958]$)\\
-$b$ at $350\hPa$: cycle phases / at $x_d^{\mp}$ &
-$+0.0137$, $-0.0350\K$ \;/\; $+7.6\times10^{-11}$, $-8.0\times10^{-11}\K$\\
-$E_M$ across $x_d$ & $0 \leftrightarrow 224.23146\Jkg$ (raw signed value
-$-60.9\Jkg$ before clamp)\\
+$b$ at $350\hPa$, cycle phases & $+0.0137$ / $-0.0350\K$\\
+$b$ at $350\hPa$, at $x_d^{\mp}$ & $+7.6\times10^{-11}$ /
+$-8.0\times10^{-11}\K$\\
+$E_M$ across $x_d$ & $0 \leftrightarrow 224.23146\Jkg$ (raw $-60.9$
+before clamp)\\
 $E_{MS}$, $T_O$ at $x_d$ (smooth) & $8565.00966\Jkg$, $206.1096884\K$\\
 ambient CAPE $E_A$ & $1.19\Jkg$ (\#77); $0$ (both 1995 profiles)\\
-corrected root (max-work, bracketed) & $x_*=950.3136889226\hPa$;
-$V_{\max}=83.9065\ms$, $P_{\min}=920.7517\hPa$\\
-1995 marginal: cycle / corrected root & $961.017\leftrightarrow961.671\hPa$
-\;/\; $x_*=960.7687\hPa$, $V_{\max}=74.4149\ms$\\
+corrected root (max-work, bracketed) & $x_*=950.3136889226\hPa$\\
+corrected outputs & $V_{\max}=83.9065\ms$, $P_{\min}=920.7517\hPa$\\
+1995 marginal: cycle & $961.017\leftrightarrow961.671\hPa$\\
+1995 marginal: corrected root & $x_*=960.7687\hPa$, $V_{\max}=74.4149\ms$\\
 1995 control (max-work vs legacy) & fixed point moves $0.0035\hPa$
-(ballistic rule would move it $1.2\hPa$)\\
+(ballistic rule: $1.2\hPa$)\\
 \bottomrule
 \end{tabular}
 \end{center}
