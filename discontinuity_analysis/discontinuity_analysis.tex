@@ -184,13 +184,41 @@ positive region of $b$, one hump of $W$, an unambiguous LNB at the argmax.
 \begin{figure}[tb]
 \centering
 \includegraphics[width=0.86\linewidth]{fig_healthy_anatomy.pdf}
-\caption{A generic strong-PI column (September, Caribbean; the saturated
-parcel of \S\ref{sec:map}).  (a)~Buoyancy of the lifted parcel at the 28
-retained grid levels.  (b)~The running work integral $W(q)$: a single
-dominant hump; CAPE is its maximum, attained at the LNB.  For such profiles
-every convention below coincides.}
+\caption{A generic strong-PI column (January, eastern tropical Pacific,
+$10^{\circ}$N $108^{\circ}$W; the saturated parcel of \S\ref{sec:map},
+$V_{\max}=72.5\ms$).  (a)~Buoyancy of the lifted parcel at the 28 retained
+grid levels: positive through the troposphere, crossing zero between the
+$100$ and $70\hPa$ levels.  (b)~The running work integral $W(q)$: a single
+dominant hump; CAPE ($7764\Jkg$) is its maximum, attained at the
+interpolated LNB ($91.2\hPa$).  For such profiles every convention below
+coincides.}
 \label{fig:anatomy}
 \end{figure}
+
+\begin{remark}[the $p_{\mathrm{top}}$ truncation can clip the LNB]
+\label{rem:ptop}
+The retained column ends at the last level above $p_{\mathrm{top}}=50\hPa$
+--- here $70\hPa$.  For the most intense columns the saturated parcel is
+\emph{still buoyant at $70\hPa$} (its true zero crossing lies above the
+cutoff); the code then sets $\mathrm{INB}$ to the top retained level and
+reports LNB $=70\hPa$, $T_O=T(70\hPa)$.  In the 2024 benchmark this affects
+$23/7093$ converging columns ($0.3\%$) --- precisely the extreme tail, every
+one with $V_{\max}>86\ms$.  The bias has two competing parts: the true LNB
+sits higher, where the stratospheric environment is \emph{warmer}, so the
+clipped $T_O$ is too cold (efficiency, hence $V_{\max}$, overestimated),
+while the uncaptured positive area above $70\hPa$ underestimates CAPE.  It
+cannot be quantified from the shipped sample, whose data itself stops at
+$50\hPa$; assessing it requires source data with higher levels (available
+in ERA5, and present in the PR~\#77 profile) plus a $p_{\mathrm{top}}$
+sensitivity test --- bearing in mind that the reversible parcel model
+itself becomes questionable in the stratosphere, which is presumably why
+\texttt{pcmin} truncates at all, and that under the legacy selector a
+deeper column would add \emph{more} marginal pockets to flicker (under
+max-work it is harmless).  This truncation bias is orthogonal to the
+discontinuity studied here, but a robust API should flag a clipped LNB
+($\mathrm{INB}$ at the profile top) rather than report it as an ordinary
+outflow level.
+\end{remark}
 
 \begin{remark}[the two negative tails of $W$]\label{rem:tails}
 In the $W$ figures the curve dips negative at \emph{both} ends, for
@@ -297,7 +325,7 @@ converge geometrically (Fig.~\ref{fig:healthymap}).
 \includegraphics[width=0.5\linewidth]{fig_healthy_map.pdf}
 \caption{The map $g$ for the generic column of Fig.~\ref{fig:anatomy}, with
 the cobweb of the iteration from $x_0=970$: contraction to a fixed point at
-$861.8\hPa$.}
+$944.6\hPa$ in seven steps.}
 \label{fig:healthymap}
 \end{figure}
 
@@ -838,7 +866,8 @@ return value plus argmax metadata; classify every material difference from
 legacy on the full sample before choosing the default/compatibility policy.
 \item[C --- outflow semantics.]  Specify the tie rule and the relation
 between the maximizing level and PI's outflow temperature; detect saturated
-argmax exchanges.  If ballistic reachability is wanted for other
+argmax exchanges; flag LNBs clipped by the $p_{\mathrm{top}}$ truncation
+(Remark~\ref{rem:ptop}).  If ballistic reachability is wanted for other
 applications, expose it as a distinctly named free-convection diagnostic,
 never as the PI default.
 \item[D --- bracketed solver.]  Brent/bisection with cached CAPE

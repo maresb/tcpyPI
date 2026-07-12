@@ -48,6 +48,7 @@ D = np.load(os.path.join(SCRATCH, "docdata.npz"))
 FX = np.load(os.path.join(SCRATCH, "fixdata.npz"))
 H = np.load(os.path.join(SCRATCH, "humpdata.npz"))
 HW = {t: np.load(os.path.join(SCRATCH, f"humpW_{t}.npz")) for t in ("lo", "at", "hi")}
+H2 = np.load(os.path.join(SCRATCH, "healthy2.npz"))
 A = np.load(os.path.join(SCRATCH, "branch_pi.npz"))
 B = np.load(os.path.join(SCRATCH, "branch_fix_pi.npz"))
 
@@ -112,25 +113,25 @@ plt.close(fig)
 # =====================================================================
 fig, axs = plt.subplots(1, 2, figsize=(7.0, 3.1))
 ax = axs[0]
-ax.plot(D["c_b"], D["c_blevels"], color=BLUE, marker="o", ms=2.5, lw=1.2)
+ax.plot(H2["c_b"], H2["c_blevels"], color=BLUE, marker="o", ms=2.5, lw=1.2)
 ax.axvline(0, color=INK2, lw=0.7)
 ax.set_ylim(1010, 40)
 ax.set_xlabel(r"buoyancy $b_j$  [K]")
 ax.set_ylabel("pressure [hPa]  (up = higher altitude)")
 ax.set_title("(a) buoyancy of the lifted parcel")
 ax = axs[1]
-ax.plot(D["c_W_W"], D["c_W_p"], color=BLUE, lw=1.4)
-kmax = int(np.argmax(D["c_W_W"]))
-ax.plot(D["c_W_W"][kmax], D["c_W_p"][kmax], "o", color=AQUA, ms=6, zorder=6)
+ax.plot(H2["c_W_W"], H2["c_W_p"], color=BLUE, lw=1.4)
+kmax = int(np.argmax(H2["c_W_W"]))
+ax.plot(H2["c_W_W"][kmax], H2["c_W_p"][kmax], "o", color=AQUA, ms=6, zorder=6)
 ax.annotate("LNB / argmax\n(CAPE = max $W$)",
-            xy=(D["c_W_W"][kmax], D["c_W_p"][kmax]), xytext=(0.35, 0.45),
+            xy=(H2["c_W_W"][kmax], H2["c_W_p"][kmax]), xytext=(0.35, 0.45),
             textcoords="axes fraction", fontsize=8, color=INK2,
             arrowprops=dict(arrowstyle="->", color=INK2, lw=0.8))
 ax.axvline(0, color=INK2, lw=0.7)
 ax.set_ylim(1010, 40)
 ax.set_xlabel(r"$W(p_t)$  [J kg$^{-1}$]")
 ax.set_title("(b) running work integral (single hump)")
-fig.suptitle("Generic column (September, Caribbean): one positive region, unambiguous LNB",
+fig.suptitle("Generic column (January, eastern tropical Pacific, 10\u00b0N 108\u00b0W): one positive region, unambiguous LNB",
              fontsize=9, y=1.02)
 fig.tight_layout()
 fig.savefig(f"{FIG}/fig_healthy_anatomy.pdf"); fig.savefig(f"{FIG}/fig_healthy_anatomy.png", dpi=100)
@@ -140,11 +141,11 @@ plt.close(fig)
 # FIG 2: healthy map — g smooth at the crossing, iteration converges
 # =====================================================================
 fig, ax = plt.subplots(figsize=(4.6, 3.4))
-plot_map_with_jumps(ax, D["c_pm"], D["c_g"], jump_thresh=0.15)
-lim = [850, 1000]
+plot_map_with_jumps(ax, H2["c_pm"], H2["c_g"], jump_thresh=0.15)
+lim = [900, 1000]
 ax.plot(lim, lim, color=INK2, lw=0.8, ls="--", label="diagonal $g(x)=x$")
-cobweb(ax, list(D["c_iter"]), color=INK, lw=0.9)
-xfp = D["c_iter"][-1]
+cobweb(ax, list(H2["c_iter"]), color=INK, lw=0.9)
+xfp = H2["c_iter"][-1]
 ax.plot(xfp, xfp, "o", color=AQUA, ms=7, zorder=7)
 ax.set_xlim(*lim)
 ax.set_ylim(*lim)
