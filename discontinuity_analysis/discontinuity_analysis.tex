@@ -270,8 +270,40 @@ $z_{\mathrm{top}}$ is the topmost down-crossing of the piecewise-linear $b$
 
 Pointwise, $\Etop \le \Emax$ and $\Ereach\le\Emax$:
 Convention~\ref{conv:top} evaluates $W$ at one particular candidate,
-Convention~\ref{conv:max} at the best one.  For a single-hump $W$ --- the
-overwhelmingly common case --- all three agree exactly.
+Convention~\ref{conv:max} at the best one.  Figure~\ref{fig:conventions}
+shows the four archetypal profiles that span all the ways the three can
+relate.  (a)~For a single-hump $W$ --- the overwhelmingly common case ---
+all three agree exactly.  They separate only when the buoyancy has a second
+positive layer aloft, and then in three distinct ways.  (b)~If the upper
+cell is \emph{dominated} (its local maximum of $W$ is lower) but no energy
+barrier intervenes ($W>0$ throughout), then $\Emax=\Ereach$ at the lower
+cell while $\Etop$, bound to the \emph{topmost} crossing, returns the
+smaller upper value: it undercounts by charging the full traversal cost of
+the valley for a destination that was not worth reaching.  (c)~If the upper
+feature is marginal \emph{and} sits behind a barrier ($W<0$ in between) ---
+the issue-77 configuration --- the signed integral to the top is negative
+and the clamp returns $\Etop=0$, while $\Emax=\Ereach$ sit unperturbed at
+the lower cell; worse, as \S\ref{sec:toy} shows, $\Etop$ here flips
+discontinuously between the two regimes as the marginal feature's sign
+flickers.  (d)~If the upper cell is \emph{dominant} but behind a barrier,
+$\Emax=\Etop$ at the top while the ballistic $\Ereach$ stalls at the lower
+cell: the one configuration where the reachability convention parts company
+with the other two.
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=0.98\linewidth]{fig_conventions.pdf}
+\caption{The three CAPE conventions on four archetypal smooth profiles
+(shaded bands: layers of positive buoyancy; curves: the running work
+integral $W$).  Markers show each convention's terminal point and value:
+$\Emax$ (dot), $\Ereach$ (open square), $\Etop$ (cross).  (a)~One positive
+region: all agree.  (b)~Dominated upper cell, no barrier:
+$\Etop<\Emax=\Ereach$.  (c)~Marginal bump behind a barrier (the issue-77
+shape): $\Etop$ is clamped to $0$ from a negative signed integral;
+$\Emax=\Ereach$ ignore the bump.  (d)~Dominant upper cell behind a barrier:
+$\Ereach<\Emax=\Etop$.}
+\label{fig:conventions}
+\end{figure}
 
 \paragraph{Which convention does the physics of PI want?}
 The word ``CAPE'' is misleading here.  In an ordinary sounding it is read as
@@ -347,7 +379,11 @@ e^{-\left(\frac{t-0.5}{0.12}\right)^2}}_{\text{stable ``valley''}}\;+\;
 e^{-\left(\frac{t-0.8}{0.06}\right)^2}}_{\text{upper feature}},
 \end{equation}
 with $W(t)=\int_0^t b$, and evaluate the three conventions along two sweeps
-(Fig.~\ref{fig:toy}).
+(Fig.~\ref{fig:toy}).  The sweeps animate the archetypes of
+Fig.~\ref{fig:conventions}: sweep 1 carries the profile into and out of
+archetype~(c) as the marginal bump's sign flickers; sweep 2 deforms
+archetype~(b) into archetype~(d) as the valley deepens and the barrier
+closes.
 
 \begin{figure}[tb]
 \centering
