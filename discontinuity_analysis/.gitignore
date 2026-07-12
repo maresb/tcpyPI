@@ -1,5 +1,3 @@
-# compiled document (build with `latexmk -pdf`); figure PDFs stay tracked
-/discontinuity_analysis.pdf
 # latexmk / TeX intermediates
 *.aux
 *.log
