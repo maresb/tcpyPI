@@ -614,8 +614,7 @@ sign change is across the gap; no root exists.}
 \subsection{The magnitude of the jump, and the true role of the clamp}
 \label{sec:jumpmag}
 
-The failure involves three scales spanning four orders of magnitude, and
-they should not be conflated:
+Several distinct magnitudes are in play, and they should not be conflated:
 
 \begin{center}
 \small
@@ -623,18 +622,27 @@ they should not be conflated:
 \toprule
 quantity & value & what it is\\
 \midrule
-trigger & $\sim10^{-2}\Jkg$ & the marginal pocket whose \emph{sign} flips\\
-CAPE response & $0\leftrightarrow224.23\Jkg$ & $E_M$, amplified by the
-selector\\
-jump of $g$ & $0.838\hPa$ & the map discontinuity that kills the root\\
+perturbation that flips the outcome & infinitesimal & a sign crossing
+($\pm8\times10^{-11}\K$ one-sided)\\
+the deciding feature itself & $\sim10^{-2}\Jkg$ & the marginal pocket
+whose sign is read\\
+jump of $E_M$ & $224.23\Jkg$ & the discontinuity, in the CAPE
+functional\\
+jump of $g$ & $0.838\hPa$ & the \emph{same} discontinuity, attenuated
+through \eqref{eq:g}\\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent
-The amplification $10^{-2}\to224\Jkg$ is the selector's doing
-(\S\ref{sec:pr77}); the \emph{attenuation} $224\Jkg\to0.838\hPa$ is the
-thermodynamics of \eqref{eq:g}, and is worth making exact, because the
+The trigger being infinitesimal is not a separate scale --- it is what
+``discontinuity'' means: a finite response to an arbitrarily small
+perturbation.  The two quantitative facts worth explaining are that the
+finite response bears no relation to the deciding feature's own energy
+($224\Jkg$ decided by a $10^{-2}\Jkg$ pocket --- the selector's doing,
+\S\ref{sec:pr77}), and that the fixed-point map inherits the jump three
+orders of magnitude smaller ($0.838\hPa$ --- the thermodynamics of
+\eqref{eq:g}).  The attenuation is worth making exact, because the
 result's size relative to the stopping tolerance is what makes the failure
 silent.  Across $x_d$ every term of \eqref{eq:g} except $E_M$ is smooth, so
 the jump is $E_M$'s jump pushed through $g$.  Since the exponent moves by
