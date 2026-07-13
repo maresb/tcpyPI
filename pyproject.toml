@@ -90,6 +90,21 @@ h5netcdf = "*"
 [tool.pixi.feature.notebook.dependencies]
 ipykernel = "*"
 
+[tool.pixi.feature.octave]
+# Octave is not packaged for win-64 on conda-forge, so restrict this feature to
+# the platforms where it is available.
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[tool.pixi.feature.octave.dependencies]
+# GNU Octave runs the original MATLAB potential-intensity code in matlab_scripts/
+# (e.g. pc_min.m) without a MATLAB license.
+octave = "*"
+
+[tool.pixi.feature.octave.tasks]
+# Run and validate matlab_scripts/pc_min.m against the reference values in
+# data/sample_data.nc.
+pc-min-octave = "octave-cli --no-gui matlab_scripts/run_pc_min.m"
+
 [tool.pixi.target.osx-64.dependencies]
 # Workaround for duplicate LD_RPATH issue on MacOS 15.4
 # <https://github.com/prefix-dev/pixi/issues/3479>
@@ -112,3 +127,6 @@ test-latest = {features = ["test"], solve-group = "default"}
 test-xarray-latest = {features = ["test", "xarray"], solve-group = "default"}
 test-old = {features = ["test", "old-dependency-versions"], solve-group = "old"}
 test-xarray-old = {features = ["test", "xarray", "old-dependency-versions"], solve-group = "old"}
+# Octave only needs its own interpreter to run the matlab_scripts/, so it is kept
+# in a standalone environment without the Python/tcpyPI default dependencies.
+octave = {features = ["octave"], no-default-feature = true}

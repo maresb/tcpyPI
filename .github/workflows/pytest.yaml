@@ -39,3 +39,23 @@ jobs:
     - name: Run xarray tests
       run: |
         pixi run -e test-xarray-${{ matrix.dependencies }} xarray-tests
+
+  octave:
+    name: octave-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false  # Don't cancel other jobs if one fails
+      matrix:
+        # Octave is not packaged for win-64 on conda-forge.
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: prefix-dev/setup-pixi@v0.9.1
+      with:
+        environments: octave
+
+    - name: Run pc_min.m under Octave
+      run: |
+        pixi run -e octave pc-min-octave
