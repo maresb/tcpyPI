@@ -97,7 +97,11 @@ iteration cap cannot help.
 $0.837\hPa$ at $x_d\simeq950.829\hPa$; the residual $g(x)-x$ passes
 from $+0.507$ to $-0.331\hPa$ across the jump without taking the value zero.
 A sign-change search reports $x_d$, but that is the location of a jump, not
-a root.
+a root.  The jump's size is no accident: it is $\sim\!200\Jkg$ of clamped
+eyewall CAPE times the pressure sensitivity
+$g\,c_1/(R_d\overline T_v)\approx3.7\times10^{-3}\hPa$ per $\Jkg$ ---
+generically $0.7$--$0.9\hPa$, just above the $0.5\hPa$ tolerance
+(\S\ref{sec:jumpmag}).
 \item \textbf{The cause is one discontinuous selection.}  In \texttt{cape()},
 the level of neutral buoyancy is taken to be the \emph{highest sampled level
 with positive buoyancy}.  For the eyewall parcel this one-bit decision moves
@@ -280,8 +284,10 @@ zero:
 \]
 where $z_{\mathrm{top}}$ is the topmost down-crossing of the
 piecewise-linear $b$ (or the profile top if $b_N>0$).  The clamp
-$\max(\,\cdot\,,0)$ turns a possibly negative signed integral into $0$;
-it \emph{is} reachable here, and is half of the issue-77 mechanism.
+$\max(\,\cdot\,,0)$ turns a possibly negative signed integral into $0$; it
+\emph{is} reachable here and pins one branch of the issue-77 flip at
+exactly $0$ --- though the discontinuity itself lives in the selector, not
+the clamp, which in fact attenuates the jump (\S\ref{sec:jumpmag}).
 \end{convention}
 
 To be clear about provenance: Convention~\ref{conv:top} is \emph{not} a
@@ -565,15 +571,18 @@ $\approx222$--$224\Jkg$ depending on the trial pressure), a deep negative
 valley from $750$ to $400\hPa$ ($-287\Jkg$), and the marginal excursion at
 the $350\hPa$ node.  When that node's sign flickers positive, the selector
 teleports its terminal point from $\approx745$ to $350\hPa$, the signed
-integral becomes $226.6+0.01-287.5=-60.9\Jkg$, and the final clamp
-$\max(\,\cdot\,,0)$ maps it to $0$.  Composing the three steps,
+integral becomes $226.6+0.01-287.5=-60.9\Jkg$ (at cycle phase $A$;
+$-65.90\Jkg$ at $x_d^-$), and the final clamp $\max(\,\cdot\,,0)$ maps it
+to $0$.  Composing the three steps,
 \[
 b\;\longmapsto\;\mathrm{INB}=\max\{j: b_j>0\}
 \;\longmapsto\; W(z_{\mathrm{top}})
 \;\longmapsto\; \max(\,\cdot\,,0),
 \]
-the first arrow is the discontinuous one; the clamp then pins one side to
-the constant $0$, maximizing the jump.  Note also (Fig.~\ref{fig:mech}b)
+the first arrow is the discontinuous one; the clamp pins one side at
+exactly $0$ --- and, perhaps counter-intuitively, \emph{attenuates} the
+jump rather than enlarging it (\S\ref{sec:jumpmag}).  Note also
+(Fig.~\ref{fig:mech}b)
 that $W(350\hPa)=-61\Jkg<0$: even a ballistic parcel could never reach the
 level whose sign decides between $224$ and $0$ --- it would stall inside the
 valley.  Under \emph{every} available physical semantics ($\Emax$,
@@ -601,6 +610,79 @@ flicker of the same kind).  (b)~The residual $F=g-x$ near $x_d$: the only
 sign change is across the gap; no root exists.}
 \label{fig:capem}
 \end{figure}
+
+\subsection{The magnitude of the jump, and the true role of the clamp}
+\label{sec:jumpmag}
+
+The failure involves three scales spanning four orders of magnitude, and
+they should not be conflated:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+quantity & value & what it is\\
+\midrule
+trigger & $\sim10^{-2}\Jkg$ & the marginal pocket whose \emph{sign} flips\\
+CAPE response & $0\leftrightarrow224.23\Jkg$ & $E_M$, amplified by the
+selector\\
+jump of $g$ & $0.838\hPa$ & the map discontinuity that kills the root\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The amplification $10^{-2}\to224\Jkg$ is the selector's doing
+(\S\ref{sec:pr77}); the \emph{attenuation} $224\Jkg\to0.838\hPa$ is the
+thermodynamics of \eqref{eq:g}, and is worth making exact, because the
+result's size relative to the stopping tolerance is what makes the failure
+silent.  Across $x_d$ every term of \eqref{eq:g} except $E_M$ is smooth, so
+the jump is $E_M$'s jump pushed through $g$.  Since the exponent moves by
+only $8.8\times10^{-4}$, linearization is essentially exact:
+\begin{equation}\label{eq:jumpmag}
+|\Delta g| \;\approx\; g\cdot\frac{\Delta E_M}{R_d\,\overline T_v}
+\,\Bigl(1-\tfrac12\,\kappa\,\tfrac{\mathrm{SST}}{T_O}\Bigr).
+\end{equation}
+Three factors attenuate.  \emph{Partial cancellation}:
+$c_1=1-\tfrac12\kappa\,\mathrm{SST}/T_O=0.342$, because $E_M$ enters
+$\mathrm{CAT}$ twice with opposite signs ($+E_M$ directly, $-0.658\,E_M$
+through the dissipative-heating term), so two-thirds of any $E_M$ change
+cancels before reaching the pressure.  \emph{The thermal-energy
+denominator}: $R_d\overline T_v=87.0\,\mathrm{kJ\,kg^{-1}}$ --- pressure
+responds by a factor $e$ only to that much $\mathrm{CAT}$, and $224\Jkg$ is
+$0.26\%$ of it.  \emph{The level itself}: $g\approx951\hPa$ multiplies the
+relative change.  Product: $\partial g/\partial E_M=3.74\times10^{-3}\hPa$
+per $\Jkg$; with $\Delta E_M=224.23\Jkg$, \eqref{eq:jumpmag} predicts
+$0.838\hPa$ against the measured $0.8381\hPa$ --- three significant
+figures.  The same formula with the 1995 column's own factors
+($\Delta E_M=203.0\Jkg$, $T_O=212.8\K$, $c_1=0.369$) predicts $0.840\hPa$
+against its measured $0.839\hPa$.
+
+That second agreement exposes the \emph{generic scale} of these failures:
+a marginal column's dominated lower hump is worth a couple hundred
+$\Jkg$, and a couple hundred $\Jkg$ times
+$\sim3.7\times10^{-3}\hPa/\Jkg$ is $0.7$--$0.9\hPa$ --- sitting just above
+the solver's $0.5\hPa$ tolerance.  A substantially larger jump would
+require implausibly large clamped CAPE; a jump below tolerance is silently
+absorbed as ``convergence'' (the iterates land within $0.5\hPa$ of each
+other across the gap and the loop exits normally).  The window
+$0.5$--$1\hPa$ is precisely the silent-failure regime, and both known
+failures sit in it.  This is not a coincidence to be shrugged at: the two
+columns reach $\approx0.84\hPa$ from \emph{different} ingredients
+($224\times0.342$ vs.\ $203\times0.369$), because neither factor varies
+much over warm marginal columns.
+
+Finally, the clamp is \emph{not} what makes the map discontinuous --- and
+it does not enlarge the jump.  Disabling $\max(\,\cdot\,,0)$, so that $E_M$
+flips $-65.90\leftrightarrow224.23\Jkg$ instead of
+$0\leftrightarrow224.23\Jkg$, leaves the discontinuity fully intact and
+\emph{increases} the measured jump to $1.0845\hPa$
+(\eqref{eq:jumpmag} with $\Delta E_M=290.13\Jkg$: $1.084$), because the raw
+signed value on the flicker side lies farther from $224$ than the clamped
+$0$ does.  The clamp's actual roles are cosmetic and attenuating: it pins
+one branch at exactly $0$ --- the clean $0\leftrightarrow224$ signature ---
+and shaves a quarter off the jump.  The discontinuity lives in the selector
+alone.
 
 \subsection{The second instance, and the control}
 
@@ -1004,8 +1086,12 @@ slope of $g$ off the jump & $0.34$--$0.46$ (on $[946,958]$)\\
 $b$ at $350\hPa$, cycle phases & $+0.0137$ / $-0.0350\K$\\
 $b$ at $350\hPa$, at $x_d^{\mp}$ & $+7.6\times10^{-11}$ /
 $-8.0\times10^{-11}\K$\\
-$E_M$ across $x_d$ & $0 \leftrightarrow 224.23146\Jkg$ (raw $-60.9$
-before clamp)\\
+$E_M$ across $x_d$ & $0 \leftrightarrow 224.23146\Jkg$\\
+raw signed integral before clamp & $-65.90\Jkg$ at $x_d^-$
+($-60.86$ at phase $A$)\\
+pressure sensitivity $\partial g/\partial E_M$ &
+$3.74\times10^{-3}\hPa/\Jkg$ ($=g\,c_1/(R_d\overline T_v)$, $c_1=0.342$)\\
+jump with clamp disabled & $1.0845\hPa$ (measured; predicted $1.084$)\\
 $E_{MS}$, $T_O$ at $x_d$ (smooth) & $8565.00966\Jkg$, $206.1096884\K$\\
 ambient CAPE $E_A$ & $1.19\Jkg$ (\#77); $0$ (both 1995 profiles)\\
 corrected root (max-work, bracketed) & $x_*=950.3136889226\hPa$\\
