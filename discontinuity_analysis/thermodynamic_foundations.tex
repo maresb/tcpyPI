@@ -282,6 +282,191 @@ argument, \eqref{eq:boltzdist} is the distribution that maximises
 $\langle E\rangle=\sum_i p_iE_i$, with $\beta$ the Lagrange multiplier for
 energy---the two derivations agree.)
 
+\subsection{The reservoir from the inside: canonical typicality and the
+\texorpdfstring{$n$}{n}-oscillator example}\label{ssec:typicality}
+
+The derivation just given works, but three of its four inputs are uncomfortable
+to a reader who believes the world is one closed system evolving unitarily. The
+reservoir is an external object introduced by hand; the equal-\emph{a priori}
+-probability postulate~(i) is imposed, not derived; and the ensemble language
+treats $p_i$ as a subjective distribution over copies rather than a property of
+a single physical state. There is a modern reading---\emph{canonical
+typicality} (Popescu, Short and Winter, \emph{Nat.\ Phys.}~\textbf{2}, 754
+(2006); Goldstein, Lebowitz, Tumulka and Zangh\`i, \emph{Phys.\ Rev.\ Lett.}
+\textbf{96}, 050403 (2006))---that produces the \emph{same} Boltzmann weights
+from a single pure state of one closed system, with the postulate replaced by a
+theorem. It is worth a page, both because it dissolves the discomfort and
+because the oscillator makes every object in it explicit.
+
+\paragraph{The general statement.} Split the closed system into the piece we
+observe and the rest, $\mathcal H=\mathcal H_S\otimes\mathcal H_E$ (``$S$'' the
+system, ``$E$'' its environment; dimensions $d_S,d_E$), and impose a global
+constraint---here a fixed total energy in a thin shell---by restricting to a
+subspace $\mathcal H_R\subseteq\mathcal H$ of dimension $d_R=\dim\mathcal H_R$.
+This $d_R$ is exactly the microstate count $\Omega$ of \eqref{eq:boltzmann}, now
+read as a Hilbert-space dimension. The uniform (microcanonical) mixture on the
+shell is $\rho_{\mathrm{mc}}=\mathbb 1_R/d_R$, and its reduction defines what PSW
+call the \emph{canonical state} of the system,
+\begin{equation}\label{eq:psw-can}
+\varrho_S \;\equiv\; \operatorname{Tr}_E\,\rho_{\mathrm{mc}}
+        \;=\; \operatorname{Tr}_E\frac{\mathbb 1_R}{d_R}.
+\end{equation}
+Now take a \emph{single} pure state $|\phi\rangle\in\mathcal H_R$---one definite
+vector, no ensemble---and form its reduced density matrix
+$\rho_S=\operatorname{Tr}_E|\phi\rangle\langle\phi|$. The theorem is that for the
+overwhelming majority of $|\phi\rangle$ (Haar measure on the unit sphere of
+$\mathcal H_R$), $\rho_S$ is indistinguishable from \eqref{eq:psw-can}:
+\begin{equation}\label{eq:psw-bound}
+\big\langle\,\lVert\rho_S-\varrho_S\rVert_1\,\big\rangle_{\phi}
+ \;\le\; \sqrt{\frac{d_S}{d_E^{\mathrm{eff}}}},
+\qquad
+d_E^{\mathrm{eff}}\equiv\frac{1}{\operatorname{Tr}(\varrho_E^{2})},\quad
+\varrho_E=\operatorname{Tr}_S\rho_{\mathrm{mc}},
+\end{equation}
+and, by L\'evy's lemma (concentration of measure on the high-dimensional
+sphere), the fraction of states violating this by any fixed margin is
+exponentially small in $d_R$. The equal-\emph{a priori} postulate is thereby
+\emph{demoted to a theorem}: one need not assume a flat distribution over
+microstates---almost every individual pure state already \emph{looks} flat to a
+small subsystem, because that is what generic entanglement across a large
+bipartition does. The weights $p_i$ become eigenvalues of a reduced density
+matrix (an objective property of one state), not a subjective ensemble.
+
+\paragraph{The $n$-oscillator realisation.} Make
+$\mathcal H_S,\mathcal H_E,\mathcal H_R$ concrete with the harmonic oscillator,
+the one closed system where the counting is elementary. Take $n$ identical
+oscillators
+\begin{equation}\label{eq:sho-H}
+\hat H=\hbar\omega\sum_{i=1}^{n}\hat n_i\qquad(\text{zero-point dropped}),
+\end{equation}
+equivalently one particle in an isotropic $n$-dimensional harmonic trap. Let $S$
+be oscillator~$1$ and $E$ the remaining $n-1$; the global constraint is a fixed
+total number of quanta $M=\sum_i k_i$, i.e.\ total energy
+$E_{\mathrm{tot}}=\hbar\omega M$. The shell
+$\mathcal H_R=\mathrm{span}\{\,|k_1,\dots,k_n\rangle:\sum_i k_i=M\,\}$ has the
+stars-and-bars dimension
+\begin{equation}\label{eq:sho-dR}
+d_R=\Omega(M,n)=\binom{M+n-1}{\,n-1\,},
+\end{equation}
+the microcanonical count for this system. A generic normalised state in it is
+$|\phi\rangle=\sum_{\sum k_i=M}c_{k_1\cdots k_n}\,|k_1,\dots,k_n\rangle$ with
+Haar-random coefficients.
+
+\emph{The reduced density matrix is automatically diagonal.} Writing an
+environment configuration as $\vec K=(k_2,\dots,k_n)$ with
+$|\vec K|\equiv\sum_{i\ge2}k_i$, the constraint forces $k_1=M-|\vec K|$ for
+\emph{every} term, so each $\vec K$ pairs with a single system level. Hence
+\begin{equation}\label{eq:sho-rhoS}
+\rho_S=\operatorname{Tr}_E|\phi\rangle\langle\phi|
+      =\sum_{k=0}^{M}\Big(\,\underbrace{\textstyle\sum_{|\vec K|=M-k}
+        |c_{k,\vec K}|^{2}}_{\displaystyle \rho_S(k)}\Big)\,|k\rangle\langle k|,
+\end{equation}
+with \emph{no} off-diagonal entries: two different system energies would need
+the same environment state to carry two different energies, which the global
+conservation law forbids. This is dephasing by a conservation law made
+concrete---the microscopic reason $\rho_S$ is a classical distribution over
+energy levels rather than a coherent superposition, so that the $\{p_i\}$ of
+\eqref{eq:boltzdist} are literally its diagonal.
+
+\emph{Its average is the canonical state.} For a Haar-random unit vector in
+$d_R$ complex dimensions $\langle|c_{k,\vec K}|^{2}\rangle=1/d_R$, and the number
+of environment configurations with $|\vec K|=M-k$ is $\Omega(M-k,\,n-1)$, so
+\begin{equation}\label{eq:sho-avg}
+\big\langle\rho_S(k)\big\rangle
+ =\frac{\Omega(M-k,\,n-1)}{d_R}
+ =\frac{\binom{M-k+n-2}{\,n-2\,}}{\binom{M+n-1}{\,n-1\,}}
+ \;\equiv\;\varrho_S(k),
+\end{equation}
+which is exactly \eqref{eq:psw-can} written out---the marginal of the
+microcanonical shell onto one oscillator.
+
+\emph{And a single state hugs that average.} The diagonal entry $\rho_S(k)$ is a
+sum of $N_k=\Omega(M-k,n-1)$ terms $|c|^{2}$, each $\sim1/d_R$; for a random unit
+vector its relative fluctuation is $1/\sqrt{N_k}$, exponentially small in $n$.
+The PSW bound \eqref{eq:psw-bound} makes this sharp. Here the reduced
+microcanonical environment state $\varrho_E$ is uniform over the $d_R$
+environment configurations with $|\vec K|\le M$ (hockey-stick identity
+$\sum_{j=0}^{M}\Omega(j,n-1)=d_R$), so $\operatorname{Tr}(\varrho_E^{2})=1/d_R$
+and $d_E^{\mathrm{eff}}=d_R$. With $d_S=M+1$ accessible levels,
+\begin{equation}\label{eq:sho-bound}
+\big\langle\lVert\rho_S-\varrho_S\rVert_1\big\rangle
+ \le\sqrt{\frac{M+1}{\binom{M+n-1}{\,n-1\,}}}
+ \;\approx\;\sqrt{\mu n}\;e^{-n\sigma(\mu)/2},
+\qquad
+\sigma(\mu)=(1{+}\mu)\ln(1{+}\mu)-\mu\ln\mu,
+\end{equation}
+where $\mu=M/n$ is the mean occupancy and $\sigma(\mu)$ is---not
+coincidentally---the canonical entropy per oscillator in units of $k_B$. The
+exponent is $n$ times a thermodynamic entropy: the measure of atypical states is
+$e^{-S/k_B}$. Numbers make the point brutal. For a modest bath of $n=100$
+oscillators at $\mu=1$ ($\beta\hbar\omega=\ln2$),
+$d_R=\binom{199}{99}\approx4.5\times10^{58}$ and the bound is below $10^{-28}$: a
+\emph{single} random pure state of one hundred oscillators already presents
+oscillator~$1$ with a density matrix that is thermal to twenty-eight decimal
+places---no reservoir, no ensemble, no postulate, only the geometry of a
+high-dimensional sphere.
+
+\paragraph{Recovering the Boltzmann weight, and meeting \S\ref{ssec:boltzdist}.}
+It remains to identify $\varrho_S$ with the Gibbs state. This is the
+\emph{equivalence of ensembles}, and for the oscillator it is one line: the
+consecutive ratio of \eqref{eq:sho-avg} is
+\begin{equation}\label{eq:sho-ratio}
+\frac{\varrho_S(k{+}1)}{\varrho_S(k)}=\frac{M-k}{\,M-k+n-2\,}
+\xrightarrow[\;M=\mu n\;]{n\to\infty}\frac{\mu}{\mu+1}\equiv x,
+\end{equation}
+so $\varrho_S(k)\to(1-x)\,x^{k}$, a geometric (Planck) distribution---precisely
+$e^{-\beta\hbar\omega\,k}/Z_S$ with $Z_S=(1-x)^{-1}$ and $x=e^{-\beta\hbar\omega}$.
+The temperature is not an input: differentiating \eqref{eq:sho-dR} gives
+$\beta=\partial\ln\Omega/\partial E=(\hbar\omega)^{-1}\ln\frac{M+n}{M}
+=-(\hbar\omega)^{-1}\ln x$, i.e.\ the very
+$\beta=\partial\ln\Omega_{\mathrm{res}}/\partial E$ of
+\eqref{eq:expand}--\eqref{eq:beta}, now read off the closed system's own
+microcanonical dial, and giving $\langle k\rangle=\mu=(e^{\beta\hbar\omega}-1)^{-1}$,
+the Bose occupancy. The two logically distinct steps deserve separating:
+\eqref{eq:psw-bound}/\eqref{eq:sho-bound} (typicality, $\rho_S\to\varrho_S$) is
+the genuinely new, kinematic content that retires postulate~(i);
+\eqref{eq:sho-ratio} ($\varrho_S\to$ Gibbs) is the old large-bath argument---and
+it \emph{is} the Taylor truncation of \S\ref{ssec:boltzdist}, since
+$\ln\Omega(M{-}k,n{-}1)=(n{-}2)\ln(M{-}k)+\mathrm{const}$ expands to
+$-\beta\hbar\omega\,k$ with a dropped quadratic term smaller by $O(1/n)$. The
+oscillator lets one \emph{watch} both the postulate and the truncation of
+\eqref{eq:expand} become controlled, exact statements.
+
+\paragraph{Why the oscillator is also the cautionary tale.} Typicality is purely
+\emph{kinematic}: \eqref{eq:sho-bound} counts states and never used the dynamics.
+It guarantees thermal reductions are overwhelmingly abundant on the shell, but
+not that an \emph{arbitrary} initial state \emph{evolves into} them---that is the
+ergodicity question, and the bare oscillator fails it, instructively, for two
+structural reasons. First, within one shell every basis state has the same
+energy $\hbar\omega M$, so $e^{-i\hat Ht/\hbar}$ acts as a single global phase
+and $\rho_S(t)=\rho_S(0)$ is frozen: a deliberately atypical start (all $M$
+quanta in oscillator~$1$, $\rho_S=|M\rangle\langle M|$ pure) stays non-thermal
+forever. Second, across shells the spectrum is exactly equally spaced, so the
+whole system revives exactly every $2\pi/\omega$---there is no dephasing to carry
+an out-of-equilibrium state toward the typical set. Equivalently, the eigenstates
+are product Fock states $|k_1,\dots,k_n\rangle$, and a single one reduces to a
+\emph{pure} $|k_1\rangle$, the opposite of thermal: the harmonic oscillator flatly
+violates the eigenstate-thermalisation property a chaotic $\hat H$ would enjoy.
+The cure is the one that also makes the spectrum generic---a weak anharmonic
+coupling $\lambda\sum_i x_i x_{i+1}$ (the Fermi--Pasta--Ulam--Tsingou
+perturbation) lifts the degeneracy and the commensurability, entangles the
+eigenstates, and restores both relaxation and eigenstate thermality, at the cost
+of the closed-form counting above. The division of labour is exactly the one
+worth recording: \emph{typicality} (a theorem, and all the parcel's equilibrium
+thermodynamics needs) makes equilibrium states almost all of the shell, while
+\emph{ergodicity} (a dynamical hypothesis the integrable oscillator lacks) is the
+stronger, separate input needed to \emph{reach} them in time.
+
+\medskip\noindent
+None of this changes a line of \texttt{entropy\_S}: the $\beta=1/k_BT$ and the
+Boltzmann weights are identical to \S\ref{ssec:boltzdist}. What changes is their
+standing---no external reservoir, no imposed postulate, one closed Hamiltonian
+system read through a single theorem. This is the same closed-system stance that
+\S\ref{sec:conservation} takes for the \emph{conservation} of $s$ on the ascent;
+\S\ref{ssec:micro} there and this subsection are its two faces---why the weights
+are canonical, and why they stay frozen---each dispensing with the reservoir in
+favour of one Hamiltonian.
+
 \subsection{From \texorpdfstring{$Z$}{Z} to entropy, and indistinguishable particles}
 \label{ssec:Z}
 
@@ -789,7 +974,7 @@ instant it forms: the system is then \emph{open}, $\rt$ is not conserved, and
 the invariant is not \eqref{eq:E94} but an approximate pseudo-entropy. The
 distinction is physical, not numerical.
 
-\subsection{The microscopic reading}
+\subsection{The microscopic reading}\label{ssec:micro}
 
 Statistical mechanics gives \eqref{eq:isentropic} a clean interpretation. A
 reversible adiabatic change is a \emph{slow} deformation of the parcel's
@@ -805,6 +990,12 @@ individual energy levels move. Isentropic literally means \emph{the
 microstate count does not change---the levels merely shift}. Note that the two
 senses of ``adiabatic'' (thermodynamic: no heat; mechanical: slow) here
 coincide, which is why the slow, heat-free ascent lands on a single adiabat.
+This is the closed-system twin of \S\ref{ssec:typicality}: there the same
+no-reservoir, single-Hamiltonian stance fixes \emph{which} weights $p_i$ are
+canonical (a pure state's reduced density matrix); here it explains why those
+weights are \emph{frozen} under the reversible ascent. Together they carry both
+halves of the Gibbs entropy \eqref{eq:gibbs}---the value of the weights and
+their constancy---without ever invoking a heat bath.
 
 \section{The moist adiabat and buoyancy}\label{sec:adiabat}
 
