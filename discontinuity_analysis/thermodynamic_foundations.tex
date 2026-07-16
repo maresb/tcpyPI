@@ -4,6 +4,7 @@
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{amsmath,amssymb,amsthm}
+\usepackage{bbm}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
@@ -305,12 +306,24 @@ constraint---here a fixed total energy in a thin shell---by restricting to a
 subspace $\mathcal H_R\subseteq\mathcal H$ of dimension $d_R=\dim\mathcal H_R$.
 This $d_R$ is exactly the microstate count $\Omega$ of \eqref{eq:boltzmann}, now
 read as a Hilbert-space dimension. The uniform (microcanonical) mixture on the
-shell is $\rho_{\mathrm{mc}}=\mathbb I_R/d_R$, and its reduction defines what PSW
+shell is $\rho_{\mathrm{mc}}=\mathbbm{1}_R/d_R$, and its reduction defines what PSW
 call the \emph{canonical state} of the system,
 \begin{equation}\label{eq:psw-can}
 \varrho_S \;\equiv\; \operatorname{Tr}_E\,\rho_{\mathrm{mc}}
-        \;=\; \operatorname{Tr}_E\frac{\mathbb I_R}{d_R}.
+        \;=\; \operatorname{Tr}_E\frac{\mathbbm{1}_R}{d_R}.
 \end{equation}
+Here $\operatorname{Tr}_E$ is the \emph{partial} trace over the environment---the
+linear map from operators on $\mathcal H_S\otimes\mathcal H_E$ to operators on
+$\mathcal H_S$ fixed on product operators by
+\begin{equation}\label{eq:ptrace}
+\operatorname{Tr}_E(A\otimes B)=A\,\operatorname{Tr}B
+\qquad\Big(\text{contrast the full trace }
+\operatorname{Tr}(A\otimes B)=\operatorname{Tr}A\,\operatorname{Tr}B\Big),
+\end{equation}
+and on a general operator by linearity. It contracts the $E$ factor to a number
+while leaving the $S$ factor intact, so---unlike the full trace---it returns an
+\emph{operator} on $\mathcal H_S$, not a scalar; \eqref{eq:psw-can} is thus a
+genuine density matrix on $S$, as is the pure-state reduction introduced next.
 Now take a \emph{single} pure state $|\phi\rangle\in\mathcal H_R$---one definite
 vector, no ensemble---and form its reduced density matrix
 $\rho_S=\operatorname{Tr}_E|\phi\rangle\langle\phi|$. The theorem is that for the
