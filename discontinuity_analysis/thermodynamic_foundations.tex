@@ -175,17 +175,38 @@ inputs---they are residues of the quantum count, which is why they enter
 \item \textbf{Everything is a spectral functional of $\hat H$.} $Z(\beta)$ is
 the Laplace transform of the density of states
 $\rho(E)=\operatorname{Tr}\delta(E-\hat H)$, and $F,\langle E\rangle,S$ all
-follow from it: thermodynamics is the spectral geometry of the Hamiltonian. For
+follow from it by one derivative each---spelled out in \S\ref{ssec:Z},
+\[
+F=-k_BT\ln Z,\qquad
+\langle E\rangle=-\frac{\partial\ln Z}{\partial\beta},\qquad
+S=\frac{\langle E\rangle-F}{T}=-\frac{\partial F}{\partial T}
+\]
+---so thermodynamics is the spectral geometry of the Hamiltonian. For
 $N$ free identical particles the canonical $Z_N$ is, exactly, a symmetric
 function of the single-particle Boltzmann weights $x_k=e^{-\beta\varepsilon_k}$
----the elementary $e_N(x)$ for fermions, the complete homogeneous $h_N(x)$ for
-bosons, and the power-sum leading term $p_1(x)^N/N!$ for the Maxwell--Boltzmann
-count \eqref{eq:ZN}---so the indistinguishability that forces the $N!$ is the
-$S_N$-symmetry of these functions.
+(one weight per single-particle level $k$), and \emph{which} symmetric function
+records the exchange statistics:
+\begin{itemize}
+\item the elementary $e_N(x)=\sum_{k_1<\dots<k_N}x_{k_1}\cdots x_{k_N}$ for
+\textbf{fermions} (strictly increasing indices $\Rightarrow$ no level used
+twice---Pauli exclusion);
+\item the complete homogeneous
+$h_N(x)=\sum_{k_1\le\dots\le k_N}x_{k_1}\cdots x_{k_N}$ for \textbf{bosons}
+($\le\Rightarrow$ any level may repeat, any occupation allowed);
+\item the leading power-sum term $p_1(x)^N/N!$, with $p_1(x)=\sum_k x_k=z$, for
+the \textbf{Maxwell--Boltzmann count}---the classical $z^N/N!$ of
+\eqref{eq:ZN} (derived in \S\ref{ssec:Z}): particles taken as independent and
+then divided by $N!$ for indistinguishability, the dilute, non-degenerate limit
+(\S\ref{ssec:lambda}) in which the fermion/boson distinction washes out.
+\end{itemize}
+So the indistinguishability that forces the $N!$ is the $S_N$-symmetry of these
+functions.
 \end{itemize}
 Finally, the various \emph{ensembles} are Legendre transforms of one another,
 each holding fixed a different member of the conjugate pairs $(E,T)$, $(V,p)$,
-$(N,\mu)$; ``summing over'' a mechanical variable trades it for its conjugate:
+and $(N,\mu)$---energy with temperature, volume with pressure $p$, and particle
+number with chemical potential $\mu$ (the free-energy cost of adding one
+particle); ``summing over'' a mechanical variable trades it for its conjugate:
 \begin{center}
 \small
 \begin{tabular}{lll}
@@ -338,7 +359,9 @@ d_E^{\mathrm{eff}}\equiv\frac{1}{\operatorname{Tr}(\varrho_E^{2})},\quad
 \end{equation}
 and, by L\'evy's lemma (concentration of measure on the high-dimensional
 sphere), the fraction of states violating this by any fixed margin is
-exponentially small in $d_R$. The equal-\emph{a priori} postulate is thereby
+exponentially small in $d_R$ (nonempty but exponentially rare---the exceptional
+states, and the SHO's starkest one, are pinned down in
+Remark~\ref{rem:atypical}). The equal-\emph{a priori} postulate is thereby
 \emph{demoted to a theorem}: one need not assume a flat distribution over
 microstates---almost every individual pure state already \emph{looks} flat to a
 small subsystem, because that is what generic entanglement across a large
@@ -419,6 +442,31 @@ oscillator~$1$ with a density matrix that is thermal to twenty-eight decimal
 places---no reservoir, no ensemble, no postulate, only the geometry of a
 high-dimensional sphere.
 
+\begin{remark}[where canonical typicality fails]\label{rem:atypical}
+The bound \eqref{eq:psw-bound}/\eqref{eq:sho-bound} governs the \emph{typical}
+state; its exceptional set is nonempty, and the oscillator names it. Typicality
+fails precisely for the states with little $S{:}E$ entanglement: a product
+$|\psi_S\rangle\otimes|\psi_E\rangle$ has $\rho_S=|\psi_S\rangle\langle\psi_S|$
+pure, as far from thermal as a state can be. The extreme case is a single shell
+Fock vector with every quantum in the system,
+\begin{equation}\label{eq:atypical}
+|\phi\rangle=|M,0,\dots,0\rangle,\qquad
+\rho_S=|M\rangle\langle M|,\qquad
+\tfrac12\lVert\rho_S-\varrho_S\rVert_1=1-P(M)=1-\tfrac1{d_R},
+\end{equation}
+using $P(M)=\Omega(0,n-1)/d_R=1/d_R$. The trace distance is $\approx1$, the
+largest two density matrices can have, whereas the typical value
+\eqref{eq:sho-bound} is $\sim10^{-28}$---this lone state overshoots the bound by
+some twenty-eight orders of magnitude. Yet it costs the theorem nothing: such
+product states form a submanifold far below the sphere's $2d_R-1$ real
+dimensions and are met with probability $\sim e^{-cn}$. They are exactly the
+definite-per-oscillator-occupation states---the natural stationary states of the
+\emph{integrable} oscillator---so this kinematic exception is the shadow of the
+dynamical non-thermalisation in the cautionary tale below, and the reason a
+chaotic (ETH-obeying) $\hat H$, whose eigenstates are \emph{themselves} typical,
+has no such exceptions.
+\end{remark}
+
 \paragraph{Recovering the Boltzmann weight, and meeting \S\ref{ssec:boltzdist}.}
 It remains to identify $\varrho_S$ with the Gibbs state. This is the
 \emph{equivalence of ensembles}, and for the oscillator it is one line: the
@@ -452,9 +500,9 @@ not that an \emph{arbitrary} initial state \emph{evolves into} them---that is th
 ergodicity question, and the bare oscillator fails it, instructively, for two
 structural reasons. First, within one shell every basis state has the same
 energy $\hbar\omega M$, so $e^{-i\hat Ht/\hbar}$ acts as a single global phase
-and $\rho_S(t)=\rho_S(0)$ is frozen: a deliberately atypical start (all $M$
-quanta in oscillator~$1$, $\rho_S=|M\rangle\langle M|$ pure) stays non-thermal
-forever. Second, across shells the spectrum is exactly equally spaced, so the
+and $\rho_S(t)=\rho_S(0)$ is frozen: the deliberately atypical start of
+Remark~\ref{rem:atypical} (all $M$ quanta in oscillator~$1$,
+$\rho_S=|M\rangle\langle M|$ pure) stays non-thermal forever. Second, across shells the spectrum is exactly equally spaced, so the
 whole system revives exactly every $2\pi/\omega$---there is no dephasing to carry
 an out-of-equilibrium state toward the typical set. Equivalently, the eigenstates
 are product Fock states $|k_1,\dots,k_n\rangle$, and a single one reduces to a
