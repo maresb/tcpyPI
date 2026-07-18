@@ -592,6 +592,109 @@ with $z$ the single-particle partition function and $\varepsilon$ a
 single-particle energy (contrast $E_i$, the whole-system energy of
 \S\ref{ssec:BG}). Everything now hinges on $z$.
 
+\subsection{The bridge to \texorpdfstring{$S(E)$}{S(E)}: Laplace, Legendre, and
+why \texorpdfstring{$Z$}{Z} is the elegant object}\label{ssec:bridge}
+
+Two objects describe the same equilibrium: the microcanonical entropy $S(E)$
+---geometric and primary, the logarithm of the phase-space volume at fixed
+energy---and the canonical $Z(\beta)$ just used. Making the link exact explains
+both why they agree and why the $Z$ side carried every derivation above so much
+more lightly than the reservoir bookkeeping of \S\ref{ssec:boltzdist} did.
+
+\paragraph{The transform.} Let $\Omega(E)$ be the density of states ($\rho(E)$
+of \S\ref{ssec:operator}), so $S(E)=k_B\ln\Omega(E)$ up to a subextensive window
+constant. Then $Z$ is exactly its Laplace transform,
+\begin{equation}\label{eq:bridge-laplace}
+Z(\beta)=\int_0^\infty\!\dd E\,\Omega(E)\,e^{-\beta E}
+        =\int_0^\infty\!\dd E\,\exp\!\Big[\tfrac{1}{k_B}S(E)-\beta E\Big],
+\end{equation}
+invertible by the Bromwich integral
+$\Omega(E)=\frac{1}{2\pi i}\int Z(\beta)\,e^{\beta E}\dd\beta$: the two functions
+carry identical information. The oscillator shows this concretely. The
+microcanonical count $\Omega(M,n)=\binom{M+n-1}{n-1}$ of \eqref{eq:sho-dR} is a
+genuine combinatorial sequence, but it is packaged whole by
+\begin{equation}\label{eq:bridge-genfn}
+Z(x)=\sum_{M\ge0}\Omega(M,n)\,x^{M}
+     =\sum_{M\ge0}\binom{M+n-1}{n-1}x^{M}
+     =\frac{1}{(1-x)^{n}},\qquad x=e^{-\beta\hbar\omega},
+\end{equation}
+so $Z$ is nothing but the \emph{generating function} whose Taylor coefficients
+are the shell dimensions; a single $\Omega(M,n)$ comes back as the coefficient
+integral $\frac{1}{2\pi i}\oint Z(x)\,x^{-M-1}\dd x$, whose saddle point gives
+the entropy asymptotics. ``Laplace transform of the density of states'' and
+``generating function of the counts'' are one statement, continuous and discrete.
+
+\paragraph{The thermodynamic limit is a Legendre transform.} For a macroscopic
+system the integrand of \eqref{eq:bridge-laplace} is sharply peaked, and
+Laplace's method evaluates it at the saddle $E^\ast(\beta)$ where the exponent is
+stationary,
+\begin{equation}\label{eq:bridge-saddle}
+\frac{\dd}{\dd E}\Big[\tfrac{1}{k_B}S(E)-\beta E\Big]_{E^\ast}=0
+\;\Longrightarrow\;
+\frac{\dd S}{\dd E}\Big|_{E^\ast}=k_B\beta=\frac1T,
+\end{equation}
+which is exactly the microcanonical definition of temperature.
+Back-substituting, $-k_BT\ln Z=E^\ast-T\,S(E^\ast)=F$: the free energy is the
+Legendre transform of $S(E)$, with $\beta$ and $E$ conjugate,
+\begin{equation}\label{eq:bridge-legendre}
+\ln Z(\beta)=\sup_E\Big[\tfrac{1}{k_B}S(E)-\beta E\Big],\qquad
+\tfrac{1}{k_B}S(E)=\inf_\beta\big[\ln Z(\beta)+\beta E\big],
+\end{equation}
+with duality relations $\beta=\tfrac1{k_B}S'(E)$ and $E=-\partial_\beta\ln Z$.
+So the Legendre transform relating the ensembles (the table of
+\S\ref{ssec:operator}) is just the $N\to\infty$ shadow of the exact Laplace
+transform \eqref{eq:bridge-laplace}: the saddle collapses the whole spectrum onto
+one energy $E^\ast$ and one temperature. (This is the thermodynamic face of the
+Cram\'er/large-deviation duality between the scaled cumulant generating function
+$\ln Z$ and its rate function $S/k_B$.)
+
+\paragraph{Why $Z$ is the elegant object.} Every awkward operation on $S(E)$ is
+an easy one on $Z$, because the Laplace transform converts them:
+\begin{itemize}
+\item \textbf{A distribution becomes an analytic function.}
+$\Omega(E)=\operatorname{Tr}\delta(E-\hat H)$ is a comb of spectral spikes, and
+$S(E)$ needs a coarse-graining window to define at all; $Z(\beta)=\operatorname{Tr}
+e^{-\beta\hat H}$ is a smooth, entire function of $\beta$ for any spectrum bounded
+below---no delta functions, no window.
+\item \textbf{Convolution becomes multiplication---and the reservoir evaporates.}
+Independent systems ($\hat H=\hat H_1+\hat H_2$) \emph{convolve} their densities
+of states, $\Omega=\Omega_1\!*\Omega_2$, but simply \emph{multiply} their
+partition functions, $Z=Z_1Z_2$, so $\ln Z$ is manifestly extensive. The whole
+``system\,$+$\,reservoir, expand $\ln\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)$''
+maneuver of \S\ref{ssec:boltzdist} was a convolution evaluated by saddle point;
+in the $Z$ picture one never introduces the reservoir---with the intensive
+$\beta$ as primary, the Boltzmann weight $e^{-\beta E_i}/Z$ is immediate. The
+reservoir's only job was to fix $\beta=S_{\mathrm{res}}'/k_B$, which $Z$ takes as
+its argument.
+\item \textbf{$\ln Z$ generates the cumulants.} $\langle E\rangle=-\partial_\beta
+\ln Z$ and $\operatorname{Var}(E)=\partial_\beta^{2}\ln Z=k_BT^{2}C_V\ge0$; every
+fluctuation is a derivative of one smooth function, and fluctuation--dissipation
+is one line. Energy fluctuations are not even representable on a single
+microcanonical $E$.
+\item \textbf{$Z$ is what one computes.} Path integrals, transfer matrices,
+perturbation theory, and Monte Carlo all act on $Z$ or $\ln Z$; counting states
+at fixed energy is the hard problem. The oscillator is the epitome:
+$\Omega(M,n)=\binom{M+n-1}{n-1}$ is a nontrivial count, while $Z=(1-x)^{-n}$ is
+one line \eqref{eq:bridge-genfn}.
+\end{itemize}
+
+\paragraph{When $S(E)$ is the truer object.} The elegance has a precise price:
+the Legendre transform \eqref{eq:bridge-legendre} can only return the
+\emph{concave hull} of $S(E)$, so wherever $S(E)$ is non-concave the $Z$ picture
+silently discards information---replacing the offending region by its Maxwell
+tangent. That is exactly what happens at first-order phase transitions (the flat
+tangent is the latent heat), and in long-range or self-gravitating systems, at
+negative temperatures, and in small systems---all cases of genuine \emph{ensemble
+inequivalence}, where the microcanonical $S(E)$ is faithful and the canonical
+average is not. So the honest ranking is the geometric one: $S(E)$ is primary and
+information-complete; $Z(\beta)$ is its Laplace transform---smoother, factorising,
+fluctuation-generating, and matched to how a system is actually held (at fixed
+$T$, not fixed $E$)---and the two are fully equivalent precisely when $S(E)$ is
+concave, i.e.\ short-range interactions as $N\to\infty$. That is the parcel's
+regime, and the reason the intensive $s(T,p)$---not a fixed-energy count---is the
+right variable for the solver. Having set $Z$ against its microcanonical shadow,
+we return to the object everything hinges on: the single-particle $z$.
+
 \subsection{The translational partition function and the thermal de~Broglie wavelength}
 \label{ssec:lambda}
 
