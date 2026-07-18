@@ -601,16 +601,42 @@ energy---and the canonical $Z(\beta)$ just used. Making the link exact explains
 both why they agree and why the $Z$ side carried every derivation above so much
 more lightly than the reservoir bookkeeping of \S\ref{ssec:boltzdist} did.
 
-\paragraph{The transform.} Let $\Omega(E)$ be the density of states ($\rho(E)$
-of \S\ref{ssec:operator}), so $S(E)=k_B\ln\Omega(E)$ up to a subextensive window
-constant. Then $Z$ is exactly its Laplace transform,
-\begin{equation}\label{eq:bridge-laplace}
-Z(\beta)=\int_0^\infty\!\dd E\,\Omega(E)\,e^{-\beta E}
-        =\int_0^\infty\!\dd E\,\exp\!\Big[\tfrac{1}{k_B}S(E)-\beta E\Big],
+\paragraph{The transform.} Two objects must be kept apart. The \emph{density of
+states}
+\begin{equation}\label{eq:dos}
+\rho(E)=\operatorname{Tr}\,\delta(E-\hat H)=\sum_i\delta(E-E_i)
 \end{equation}
-invertible by the Bromwich integral
-$\Omega(E)=\frac{1}{2\pi i}\int Z(\beta)\,e^{\beta E}\dd\beta$: the two functions
-carry identical information. The oscillator shows this concretely. The
+of \S\ref{ssec:operator}---with $\delta(E-\hat H)=\sum_i\delta(E-E_i)\,
+|i\rangle\langle i|$ the operator function of $\hat H$ (evaluated on the spectrum
+and traced \emph{after}, exactly as $Z=\operatorname{Tr}e^{-\beta\hat H}
+=\sum_i e^{-\beta E_i}$)---is a distribution, a comb of one spike per level; its
+logarithm is meaningless. The Boltzmann entropy instead uses the dimensionless
+\emph{count}
+\begin{equation}\label{eq:dos-count}
+\Omega(E)=\int_E^{E+\Delta E}\!\rho(E')\,\dd E'\approx\bar\rho(E)\,\Delta E,
+\qquad S(E)=k_B\ln\Omega(E),
+\end{equation}
+the number of levels in a macroscopically thin shell $[E,E+\Delta E]$, with
+$\bar\rho$ the smoothed envelope of the comb. Because the spectrum is spaced like
+$e^{-N}$, any such shell holds astronomically many levels, so $\Omega$ is a huge
+\emph{smooth} number and $\ln\Omega$ is well defined and extensive; the window
+enters only through the subextensive $k_B\ln\Delta E$, negligible beside
+$S\sim k_BN$. ($\Omega$ and $\bar\rho$ thus agree \emph{inside} the logarithm but
+are not the same object---they differ by the units-carrying $\Delta E$, which is
+why $\rho$ and $\Omega$ get different symbols.) The partition function is the
+Laplace transform of the \emph{density} $\rho$,
+\begin{equation}\label{eq:bridge-laplace}
+Z(\beta)=\int_0^\infty\!\dd E\,\rho(E)\,e^{-\beta E}=\sum_i e^{-\beta E_i}
+        \approx\int_0^\infty\!\dd E\,\exp\!\Big[\tfrac{1}{k_B}S(E)-\beta E\Big],
+\end{equation}
+and the middle equality is the crux: the exponential kernel integrates straight
+over the comb, so $Z$ does \emph{for free} the coarse-graining that $S(E)$ needed
+a window for---the ``distribution\,$\to$\,analytic function'' elegance, met again
+below. It is invertible by the Bromwich integral
+$\rho(E)=\frac{1}{2\pi i}\int Z(\beta)\,e^{\beta E}\dd\beta$: $\rho$ and $Z$ carry
+identical information. The oscillator shows this concretely---and more cleanly
+still, since its spectrum is genuinely discrete, so the ``count'' is an honest
+integer degeneracy needing no window at all. The
 microcanonical count $\Omega(M,n)=\binom{M+n-1}{n-1}$ of \eqref{eq:sho-dR} is a
 genuine combinatorial sequence, but it is packaged whole by
 \begin{equation}\label{eq:bridge-genfn}
@@ -652,13 +678,13 @@ $\ln Z$ and its rate function $S/k_B$.)
 an easy one on $Z$, because the Laplace transform converts them:
 \begin{itemize}
 \item \textbf{A distribution becomes an analytic function.}
-$\Omega(E)=\operatorname{Tr}\delta(E-\hat H)$ is a comb of spectral spikes, and
+$\rho(E)=\operatorname{Tr}\delta(E-\hat H)$ is a comb of spectral spikes, and
 $S(E)$ needs a coarse-graining window to define at all; $Z(\beta)=\operatorname{Tr}
 e^{-\beta\hat H}$ is a smooth, entire function of $\beta$ for any spectrum bounded
 below---no delta functions, no window.
 \item \textbf{Convolution becomes multiplication---and the reservoir evaporates.}
 Independent systems ($\hat H=\hat H_1+\hat H_2$) \emph{convolve} their densities
-of states, $\Omega=\Omega_1\!*\Omega_2$, but simply \emph{multiply} their
+of states, $\rho=\rho_1\!*\rho_2$, but simply \emph{multiply} their
 partition functions, $Z=Z_1Z_2$, so $\ln Z$ is manifestly extensive. The whole
 ``system\,$+$\,reservoir, expand $\ln\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)$''
 maneuver of \S\ref{ssec:boltzdist} was a convolution evaluated by saddle point;
