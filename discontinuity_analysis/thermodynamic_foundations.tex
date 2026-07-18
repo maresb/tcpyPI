@@ -692,8 +692,80 @@ fluctuation-generating, and matched to how a system is actually held (at fixed
 $T$, not fixed $E$)---and the two are fully equivalent precisely when $S(E)$ is
 concave, i.e.\ short-range interactions as $N\to\infty$. That is the parcel's
 regime, and the reason the intensive $s(T,p)$---not a fixed-energy count---is the
-right variable for the solver. Having set $Z$ against its microcanonical shadow,
-we return to the object everything hinges on: the single-particle $z$.
+right variable for the solver.
+
+\paragraph{Hard constraint, soft constraint, and the separation of scales.} The
+same transform settles what the microcanonical and canonical descriptions are to
+\emph{each other}, and answers a natural worry: the closed whole is governed by
+exact energy conservation, yet a small piece of it obeys the Boltzmann
+distribution at a fixed temperature---these feel as if they should be the same
+statement, and are not quite. Fixing the total energy exactly is a \emph{hard}
+constraint---a delta function $\delta(E_{\mathrm{tot}}-\hat H)$ projecting onto
+the energy shell, with \emph{zero} energy fluctuation. Fixing only the
+\emph{mean} energy through $\beta$ is a \emph{soft} constraint---the Boltzmann
+weight $e^{-\beta\hat H}$, with $\beta$ a Lagrange multiplier (the Jaynes reading
+of \S\ref{ssec:boltzdist}) and the energy free to fluctuate. They are genuinely
+different ensembles, yet locked together by an identity: the hard projector is an
+integral of soft weights over imaginary temperature,
+\begin{equation}\label{eq:delta-laplace}
+\delta(E_{\mathrm{tot}}-\hat H)
+=\frac{1}{2\pi i}\int_{c-i\infty}^{c+i\infty}\!\dd\beta\;
+   e^{\beta(E_{\mathrm{tot}}-\hat H)},
+\end{equation}
+which is just the inverse Bromwich transform of \eqref{eq:bridge-laplace} read as
+an operator identity---the sharp shell is a coherent superposition of Boltzmann
+weights at \emph{every} $\beta$. ``Hard'' and ``soft'' are one function and its
+Laplace transform, not two physical laws. What makes them \emph{equivalent} for a
+macroscopic system is a separation of scales, entering in two places.
+
+\emph{Whole-system equivalence, guarded by $1/\sqrt N$.} For large $N$ the
+$\beta$-integral \eqref{eq:delta-laplace}---equivalently the Laplace integral
+\eqref{eq:bridge-laplace}---is dominated by a single real saddle $\beta^\ast$
+where $S'(E_{\mathrm{tot}})=1/T$, so the sharp constraint collapses onto
+\emph{one} effective temperature. The width of that collapse is the energy
+fluctuation the soft constraint permits, which by the cumulant identity
+$\operatorname{Var}(E)=\partial_\beta^{2}\ln Z=k_BT^{2}C_V$ above and the
+extensivity $C_V,\langle E\rangle\sim N$ is
+\begin{equation}\label{eq:relfluct}
+\frac{\sqrt{\operatorname{Var}(E)}}{\langle E\rangle}
+=\frac{\sqrt{k_BT^{2}C_V}}{\langle E\rangle}\sim\frac{\sqrt N}{N}=\frac{1}{\sqrt N}.
+\end{equation}
+Energy fluctuations are $O(\sqrt N)$ absolutely but $O(1/\sqrt N)$ relatively: the
+soft constraint is \emph{effectively} as sharp as the hard one, and the two
+ensembles agree on every intensive quantity to that order.
+
+\emph{Subsystem equivalence, guarded by $N_S/N_B$.} The framing closest to the
+parcel is a small subsystem $S$ inside a hard-constrained whole $S+B$.
+Marginalising the shell over the bath gives the subsystem's energy distribution
+\begin{equation}\label{eq:submarginal}
+p(E_S)\;\propto\;\Omega_S(E_S)\,\Omega_B(E_{\mathrm{tot}}-E_S)
+        \;=\;\Omega_S(E_S)\,e^{S_B(E_{\mathrm{tot}}-E_S)/k_B},
+\end{equation}
+which is exactly $p_i\propto\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)$ of
+\eqref{eq:pprop}. Because $E_S\ll E_{\mathrm{tot}}$---that is, $N_S\ll N_B$---the
+bath entropy is linear over the range $E_S$ explores,
+$S_B(E_{\mathrm{tot}}-E_S)\simeq S_B(E_{\mathrm{tot}})-E_S/T$, and
+\eqref{eq:submarginal} becomes the Boltzmann weight
+$p(E_S)\propto\Omega_S(E_S)\,e^{-\beta E_S}$: \textbf{the hard constraint on the
+whole is a soft constraint on the part.} The bath's temperature is
+\emph{stiff}---$\dd\beta/\dd E=-1/(k_BT^{2}C_B)$ with $C_B\sim N_B$---so draining
+$E_S$ barely moves $\beta$; the discarded curvature is the finite-bath
+back-reaction, of order $E_S/E_{\mathrm{tot}}\sim N_S/N_B$. This linearisation
+\emph{is} the Taylor truncation \eqref{eq:expand} performed by hand in
+\S\ref{ssec:boltzdist}, now with its small parameter named.
+
+\emph{When the guard fails.} Both equivalences are asymptotic and conditional. If
+$S(E)$ is non-concave the saddle of \eqref{eq:delta-laplace} is not unique---two
+compete, at a first-order transition---and the ensembles genuinely diverge, the
+very ensemble inequivalence just discussed; if the system is small,
+\eqref{eq:relfluct} is not negligible and the soft constraint is visibly looser
+than the hard one. So the instinct that the two ``ought to be the same thing'' is
+right only in the limit: they are one Laplace pair, made \emph{operationally}
+interchangeable by the $1/\sqrt N$ and $N_S/N_B$ separations, and distinguishable
+again the moment those separations close.
+
+Having set $Z$ against its microcanonical shadow, we return to the object
+everything hinges on: the single-particle $z$.
 
 \subsection{The translational partition function and the thermal de~Broglie wavelength}
 \label{ssec:lambda}
