@@ -1,10 +1,19 @@
-"""Assemble the JSON payload for the sounding-scope artifact."""
+"""Assemble the JSON payload for the sounding-scope artifact.
+
+The per-profile statistics table covers the FULL population (every column,
+binary-packed little-endian, gzipped, base64) so that counts, class shares,
+densities and the dVMAX scatters are exact under any marginalization. The
+flip-book player carries curves for a ~20k stratified sample (curves are the
+expensive part; the sample only has to be dense enough to animate).
+"""
 
 import os as _os
 from pathlib import Path as _Path
 SCRATCH = _os.environ.get("ERA5_SCRATCH", str(_Path(__file__).resolve().parent / "work"))
 _SRC = str(_Path(__file__).resolve().parents[1] / "src")
 
+import base64
+import gzip
 import json
 import sys
 
@@ -76,7 +85,7 @@ def cls(pname, i):
 rng = np.random.default_rng(42)
 
 # ---- player pool: ensure every top class of every parcel is represented ----
-pool = set(rng.choice(pop["A"], 1500, replace=False).tolist())
+pool = set(rng.choice(pop["A"], 14000, replace=False).tolist())
 # force-include the wild legacy non-convergence columns (IFL_top=2, IFL_max=1)
 legfail_rows = np.where((PI["IFL"][:, 0] == 2) & (PI["IFL"][:, 1] == 1) & mA)[0]
 pool.update(legfail_rows.tolist())
@@ -84,30 +93,34 @@ print("legacy-failure columns force-included:", len(legfail_rows))
 for pname in "ABC":
     for t in tables[pname]:
         rows = pop[pname][allstrs[pname] == t]
-        take = min(220, len(rows))
+        take = min(600, len(rows))
         pool.update(rng.choice(rows, take, replace=False).tolist())
 pool = np.array(sorted(pool))
 print("player pool:", len(pool))
 
-curves = {"A": [], "B": [], "C": []}
+# curve rectangles: (3, npool, nlvl) int16 in centi-J/kg (0.01 precision,
+# same as the old JSON rounding); zeros where B/C undefined -- gzip erases
+# the constant runs, and the JS side rebuilds [] from the class sentinel
+npool = len(pool)
+curvebuf = np.zeros((3, npool, nlvl), np.float64)
 b = np.empty(nlvl)
-for i in pool:
+for k, i in enumerate(pool):
     T = d["TC"][i, :nlvl] + 273.15
     R = d["R"][i, :nlvl] * 0.001
     buoyancy(T[0], R[0], P[0], T, R, P, nlvl, b)
-    curves["A"].append([round(float(x), 2) for x in b])
+    curvebuf[0, k] = b
     if mBC[i]:
         PP = min(z["PM"][i], 1000.0)
         MSL = d["sp_hPa"][i]
         RP = EPS * R[0] * MSL / (PP * (EPS + R[0]) - R[0] * MSL)
         buoyancy(T[0], RP, PP, T, R, P, nlvl, b)
-        curves["B"].append([round(float(x), 2) for x in b])
+        curvebuf[1, k] = b
         ES0 = utilities.es_cc(d["sst_C"][i])
         buoyancy(d["sst_C"][i] + 273.15, utilities.rv(ES0, PP), PP, T, R, P, nlvl, b)
-        curves["C"].append([round(float(x), 2) for x in b])
-    else:
-        curves["B"].append([])
-        curves["C"].append([])
+        curvebuf[2, k] = b
+curves = {pn: curvebuf[j] for j, pn in enumerate("ABC")}
+curve_i2 = np.round(curvebuf * 100).astype("<i2")
+assert np.abs(curvebuf).max() < 327, "curve exceeds int16 centi-range"
 
 lonw = np.where(d["lon"][pool] > 180, d["lon"][pool] - 360, d["lon"][pool])
 player = {
@@ -122,15 +135,14 @@ for pname in "ABC":
     m = popmask[pname]
     o = z[pname]
     player[f"c{pname}"] = [int(cls(pname, i)) for i in pool]
-    for tag, col in (("Etop", 2), ("Emax", 3), ("Efirst", 4), ("Ereach", 5)):
+    for tag, col in (("Etop", 2), ("Emax", 3), ("Ereach", 5)):
         player[f"{tag}{pname}"] = [int(round(o[i, col])) if m[i] else 0 for i in pool]
-    for tag, col in (("Ltop", 8), ("Lmax", 9), ("Lfirst", 10), ("Lreach", 11)):
+    for tag, col in (("Ltop", 8), ("Lmax", 9), ("Lreach", 11)):
         player[f"{tag}{pname}"] = [round(float(o[i, col]), 1) if m[i] else 0 for i in pool]
     player[f"topo{pname}"] = [topo_str(o[i, 0], o[i, 1]) if m[i] else ""
                               for i in pool]
-    player[f"curve{pname}"] = curves[pname]
 # PI per convention for the column (ptop=50 tcpyPI convention; -1 = missing)
-for k, tag in enumerate(("top", "max", "first", "reach")):
+for k, tag in zip((0, 1, 3), ("top", "max", "reach")):
     player[f"V{tag}"] = [round(float(PI["VMAX"][i, k]), 1)
                          if np.isfinite(PI["VMAX"][i, k]) else -1 for i in pool]
 player["Ptop"] = [round(float(PI["PMIN"][i, 0]), 1)
@@ -140,52 +152,77 @@ player["Pmax"] = [round(float(PI["PMIN"][i, 1]), 1)
 player["legfail"] = [1 if (PI["IFL"][i, 0] == 2 and PI["IFL"][i, 1] == 1) else 0
                      for i in pool]
 
-# ---- map layer ----
-msel = rng.choice(pop["A"], min(40000, len(pop["A"])), replace=False)
-msel = np.unique(np.concatenate([msel, legfail_rows]))
-mlon = np.where(d["lon"][msel] > 180, d["lon"][msel] - 360, d["lon"][msel])
-mappts = {
-    "lat": [round(float(x), 2) for x in d["lat"][msel]],
-    "lon": [round(float(x), 2) for x in mlon],
-    "doy": [int(x) for x in doy[msel]],
-    "year": [int(x) for x in years[msel]],
-    "hour": [int(x) for x in ((d["time"][msel] // 3600) % 24)],
-}
+# ---- statistics table: FULL population, binary-packed ----
+N = len(mA)
+lon_all = np.where(d["lon"] > 180, d["lon"] - 360, d["lon"])
+hours_all = (d["time"] // 3600) % 24
+
+clsv, gv = {}, {}
 for pname in "ABC":
-    mappts[f"c{pname}"] = [int(cls(pname, i)) for i in msel]
+    o = z[pname]
+    ci = np.full(N, -1, np.int8)
+    lut = tables[pname]
+    ci[pop[pname]] = np.array([lut.get(s, 7) for s in allstrs[pname]], np.int8)
+    clsv[pname] = ci
     # disagreement bitmask: 1 = clamp-flip (E_top=0 while E_max>0);
     # 2 = |E_top-E_max| > 1 J/kg; 4 = |E_reach-E_max| > 1 J/kg
-    o = z[pname]
-    m = popmask[pname]
-    g = []
-    for i in msel:
-        v = 0
-        if m[i]:
-            if o[i, 2] == 0.0 and o[i, 3] > 0.0:
-                v |= 1
-            if abs(o[i, 2] - o[i, 3]) > 1.0:
-                v |= 2
-            if abs(o[i, 5] - o[i, 3]) > 1.0:
-                v |= 4
-        g.append(v)
-    mappts[f"g{pname}"] = g
-# VMAX per convention for the scatter (-1 = missing/non-convergent)
-for k, tag in enumerate(("top", "max", "reach")):
-    kk = {"top": 0, "max": 1, "reach": 3}[tag]
-    mappts[f"V{tag}"] = [round(float(PI["VMAX"][i, kk]), 1)
-                         if np.isfinite(PI["VMAX"][i, kk]) else -1 for i in msel]
-dv = np.abs(PI["VMAX"][msel, 0] - PI["VMAX"][msel, 1])
-mappts["gpi"] = [(1 if (PI["IFL"][i, 0] == 2 and PI["IFL"][i, 1] == 1) else
-                  (2 if (np.isfinite(dvv) and dvv > 1.0) else 0))
-                 for i, dvv in zip(msel, dv)]
+    with np.errstate(invalid="ignore"):
+        g = ((o[:, 2] == 0.0) & (o[:, 3] > 0.0)).astype(np.uint8)
+        g |= (np.abs(o[:, 2] - o[:, 3]) > 1.0).astype(np.uint8) << 1
+        g |= (np.abs(o[:, 5] - o[:, 3]) > 1.0).astype(np.uint8) << 2
+    g[~popmask[pname]] = 0
+    gv[pname] = g
+
+# VMAX per convention, deci-m/s; -10 encodes missing (decodes to -1.0)
+vq = {}
+for tag, k in (("top", 0), ("max", 1), ("reach", 3)):
+    V = PI["VMAX"][:, k]
+    vq[tag] = np.where(np.isfinite(V), np.round(V * 10), -10).astype("<i2")
+legf = (PI["IFL"][:, 0] == 2) & (PI["IFL"][:, 1] == 1) & mA
+with np.errstate(invalid="ignore"):
+    dv_all = np.abs(PI["VMAX"][:, 0] - PI["VMAX"][:, 1])
+    big = np.isfinite(dv_all) & (dv_all > 1.0)
+gpi_all = np.where(legf, 1, np.where(big, 2, 0)).astype(np.uint8)
+
+# int16 columns first so every offset stays 2-byte aligned
+bincols = [
+    ("lat", "i2", 100, np.round(d["lat"] * 100).astype("<i2")),
+    ("lon", "i2", 100, np.round(lon_all * 100).astype("<i2")),
+    ("doy", "i2", 1, doy.astype("<i2")),
+    ("year", "i2", 1, years.astype("<i2")),
+    ("Vtop", "i2", 10, vq["top"]),
+    ("Vmax", "i2", 10, vq["max"]),
+    ("Vreach", "i2", 10, vq["reach"]),
+    ("hour", "u1", 1, hours_all.astype(np.uint8)),
+    ("cA", "i1", 1, clsv["A"]), ("cB", "i1", 1, clsv["B"]),
+    ("cC", "i1", 1, clsv["C"]),
+    ("gA", "u1", 1, gv["A"]), ("gB", "u1", 1, gv["B"]),
+    ("gC", "u1", 1, gv["C"]),
+    ("gpi", "u1", 1, gpi_all),
+]
+blob = b"".join(a.tobytes() for _, _, _, a in bincols)
+mapbin = {
+    "n": int(N),
+    "cols": [[name, dt, sc] for name, dt, sc, _ in bincols],
+    "b64": base64.b64encode(gzip.compress(blob, 9)).decode(),
+}
+curvebin = {
+    "n": int(npool), "nlvl": int(nlvl), "scale": 100,
+    "b64": base64.b64encode(gzip.compress(curve_i2.tobytes(), 9)).decode(),
+}
+print(f"table blob: {len(blob)/1e6:.1f} MB raw -> "
+      f"{len(mapbin['b64'])/1e6:.1f} MB b64gz; "
+      f"curves: {curve_i2.nbytes/1e6:.1f} MB raw -> "
+      f"{len(curvebin['b64'])/1e6:.1f} MB b64gz")
 
 # per-parcel x-limits for the scope (tropospheric percentiles)
 # x-limits: lower bound = the most negative any curve goes BEFORE its last
 # positive level (interior dips only; the terminal stratospheric plunge never
 # returns to positive and should not set the range), with a 10% margin.
 xlims = {}
+poolBC = mBC[pool]
 for pname in "ABC":
-    arr = np.array([c for c in curves[pname] if len(c)])
+    arr = curves[pname] if pname == "A" else curves[pname][poolBC]
     lo = 0.0
     for c in arr:
         pos = np.where(c > 0)[0]
@@ -200,7 +237,8 @@ for pname in "ABC":
 payload = {
     "P": [float(x) for x in P],
     "player": player,
-    "map": mappts,
+    "mapbin": mapbin,
+    "curvebin": curvebin,
     "classes": labels,
     "xlims": xlims,
     "years": [int(years[pop["A"]].min()), int(years[pop["A"]].max())],

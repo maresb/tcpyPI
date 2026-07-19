@@ -161,7 +161,10 @@ footer b{color:var(--ink)}
   pressure; C = air saturated at the sea-surface temperature. VMAX&sup2; &prop;
   (SST/T<sub>O</sub>)(E<sub>C</sub> &minus; E<sub>B</sub>), so with B or C
   selected the other of the pair is drawn thin and dashed: the PI winds live in
-  the gap between those two curves. Space bar toggles play. <b>Click any marginal to filter the samples</b>:
+  the gap between those two curves. Densities, class percentages, matching counts,
+  and the &Delta;VMAX scatters are computed over the <b>full population</b>
+  (every column); only the animated flip-book draws from a ~20k stratified
+  sample. Space bar toggles play. <b>Click any marginal to filter the samples</b>:
   the map selects a position (±1,500 km), the rings a day-of-year window
   (±15 days) or an hour-of-day window (±3 h UTC), the track a single year; each marginal keeps showing the
   density under the <i>other</i> filters, with its own selection dashed.
@@ -183,6 +186,44 @@ footer b{color:var(--ink)}
 <script>
 "use strict";
 const DATA = JSON.parse(document.getElementById("data").textContent);
+DATA.map = null;   // filled asynchronously from the packed full-population table
+async function inflate(b64){
+  const raw = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+  const st = new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(st).arrayBuffer();
+}
+async function decodeTables(){
+  // statistics table: one column per field, int16 columns first (alignment)
+  const mb = DATA.mapbin, buf = await inflate(mb.b64), out = {};
+  let off = 0;
+  for (const [name, dt, scale] of mb.cols){
+    let a;
+    if (dt === "i2"){ a = new Int16Array(buf, off, mb.n); off += 2*mb.n; }
+    else if (dt === "i1"){ a = new Int8Array(buf, off, mb.n); off += mb.n; }
+    else { a = new Uint8Array(buf, off, mb.n); off += mb.n; }
+    if (scale !== 1){
+      const f = new Float32Array(mb.n);
+      for (let i=0;i<mb.n;i++) f[i] = a[i]/scale;
+      a = f;
+    }
+    out[name] = a;
+  }
+  DATA.map = out; delete DATA.mapbin;
+  // player curves: (3, n, nlvl) int16 rectangles; [] where B/C undefined
+  const cb = DATA.curvebin, cbuf = await inflate(cb.b64);
+  const ci = new Int16Array(cbuf, 0, 3*cb.n*cb.nlvl);
+  [["A",0],["B",1],["C",2]].forEach(([pn, j]) => {
+    const cs = DATA.player["c"+pn], arr = [];
+    for (let i=0;i<cb.n;i++){
+      if (pn !== "A" && cs[i] < 0){ arr.push([]); continue; }
+      const f = new Float32Array(cb.nlvl), base = (j*cb.n + i)*cb.nlvl;
+      for (let k=0;k<cb.nlvl;k++) f[k] = ci[base+k]/cb.scale;
+      arr.push(f);
+    }
+    DATA.player["curve"+pn] = arr;
+  });
+  delete DATA.curvebin;
+}
 const PLV = DATA.P, NL = PLV.length;
 const MONL = ["J","F","M","A","M","J","J","A","S","O","N","D"];
 const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], pulses:[],
@@ -399,6 +440,19 @@ function drawScope(){
 // ---------- map ----------
 const MEXT = {lo:-180, hi:180, la:-80, lb:90};
 let densCache = null, densKey = "";
+const histCaches = {};
+function histo(kind, nb, binOf){
+  const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+JSON.stringify(
+    [state.selPos, kind==="doy" ? null : state.selDoy,
+     kind==="hour" ? null : state.selHour,
+     kind==="year" ? null : state.selYear, state.selPI]);
+  const hc = histCaches[kind];
+  if (hc && hc.key === key) return hc.cnt;
+  const cnt = new Float32Array(nb), n = DATA.map.lat.length;
+  for (let i=0;i<n;i++) if (passMap(i, kind)) cnt[binOf(i)]++;
+  histCaches[kind] = {key, cnt};
+  return cnt;
+}
 function buildDensity(){
   const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+cvar("--bg")+"|"+
     JSON.stringify([state.selDoy, state.selHour, state.selYear, state.selPI]);
@@ -473,11 +527,9 @@ function drawRing(now){
   const [cv,g] = ctx2("ring");
   const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
   g.clearRect(0,0,W,W);
-  const nb=36, cnt=new Float32Array(nb);
-  for (let i=0;i<DATA.map.doy.length;i++){
-    if (!passMap(i, "doy")) continue;
-    cnt[Math.min(nb-1, Math.floor((DATA.map.doy[i]-1)/366*nb))]++;
-  }
+  const nb=36;
+  const cnt = histo("doy", nb,
+    i => Math.min(nb-1, Math.floor((DATA.map.doy[i]-1)/366*nb)));
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
   const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
   for (let k=0;k<nb;k++){
@@ -517,11 +569,8 @@ function drawHours(now){
   const [cv,g] = ctx2("hours");
   const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
   g.clearRect(0,0,W,W);
-  const nb=24, cnt=new Float32Array(nb);
-  for (let i=0;i<DATA.map.hour.length;i++){
-    if (!passMap(i, "hour")) continue;
-    cnt[DATA.map.hour[i]]++;
-  }
+  const nb=24;
+  const cnt = histo("hour", nb, i => DATA.map.hour[i]);
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
   const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
   for (let k=0;k<nb;k++){
@@ -562,11 +611,7 @@ function drawYears(now){
   const W=cv.width, H=cv.height, padL=16, padR=16, padB=54, padT=26;
   g.clearRect(0,0,W,H);
   const [y0,y1] = DATA.years, ny=y1-y0+1;
-  const cnt=new Float32Array(ny);
-  for (let i=0;i<DATA.map.year.length;i++){
-    if (!passMap(i, "year")) continue;
-    cnt[DATA.map.year[i]-y0]++;
-  }
+  const cnt = histo("year", ny, i => DATA.map.year[i]-y0);
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
   const bw=(W-padL-padR)/ny;
   const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
@@ -654,9 +699,19 @@ function drawOneScatter(id, Vy, colv){
     og.setLineDash([6,5]);
     og.beginPath(); og.moveTo(padL,Y(0)); og.lineTo(W-padR,Y(0)); og.stroke();
     og.setLineDash([]); og.globalAlpha = 1;
-    og.fillStyle = cvar(colv); og.globalAlpha = 0.35;
+    og.fillStyle = cvar(colv);
+    const dense = pts.length > 20000;
+    og.globalAlpha = dense ? 0.05 : 0.35;
     for (const [x,d] of pts){
-      og.beginPath(); og.arc(X(x), Y(d), 3.0, 0, 7); og.fill();
+      if (dense) og.fillRect(X(x)-1.25, Y(d)-1.25, 2.5, 2.5);
+      else { og.beginPath(); og.arc(X(x), Y(d), 3.0, 0, 7); og.fill(); }
+    }
+    if (dense){
+      // same data, second pass: |delta| > 1 m/s (the disagreement-chip
+      // threshold) drawn opaque so outliers survive the dense cloud
+      og.globalAlpha = 0.45;
+      for (const [x,d] of pts)
+        if (Math.abs(d) > 1) og.fillRect(X(x)-1.25, Y(d)-1.25, 2.5, 2.5);
     }
     og.globalAlpha = 1;
     cache.cv = off; cache.key = key; cache.YL = YL;
@@ -737,6 +792,7 @@ function chipShares(){
   return [cnt, tot];
 }
 function buildChips(){
+  if (!DATA.map) return;
   const host=document.getElementById("chips");
   host.innerHTML="";
   let live = null, ltot = 0;
@@ -782,8 +838,10 @@ function invalidate(){
   densKey = "";
   scatCaches.scatmax.key = "";
   scatCaches.scatreach.key = "";
+  for (const k in histCaches) delete histCaches[k];
 }
 function tickOnce(){
+  if (!DATA.map) return;
   const p = pool();
   if (!p.length) return;
   state.cur = p[Math.floor(Math.random()*p.length)];
@@ -818,6 +876,7 @@ function doyLabel(d){
 }
 function selChanged(){ invalidate(); buildChips(); buildSelRow(); tickOnce(); }
 function buildSelRow(){
+  if (!DATA.map) return;
   const host = document.getElementById("selrow");
   host.innerHTML = "";
   const mk = (label, clear) => {
@@ -861,7 +920,8 @@ function buildSelRow(){
   const c = document.createElement("span");
   c.className = "chip cnt mono";
   c.textContent = `${n} flip sample${n===1?"":"s"} \u00b7 `+
-    `${m.toLocaleString("en-US")} map pts \u00b7 ${pctStr}% retained`;
+    `${m.toLocaleString("en-US")} of ${tot.toLocaleString("en-US")} columns \u00b7 `+
+    `${pctStr}% retained`;
   host.appendChild(c);
 }
 function buildConds(){
@@ -977,5 +1037,8 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change",
 
 document.getElementById("ntc").textContent = DATA.npop.A.toLocaleString("en-US");
 document.getElementById("nbc").textContent = DATA.npop.B.toLocaleString("en-US");
-buildChips(); buildConds(); buildSelRow(); tickOnce(); setTimer(); requestAnimationFrame(frame);
+decodeTables().then(() => {
+  buildChips(); buildConds(); buildSelRow(); tickOnce(); setTimer();
+  requestAnimationFrame(frame);
+});
 </script>
