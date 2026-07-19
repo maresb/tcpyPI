@@ -172,10 +172,11 @@ const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], puls
   selYear:null}; // {y}
 const RAD_KM = 1500, DOY_W = 15, HOUR_W = 3;
 state.cond = 0;
-// 0 all | 1 top!=max | 2 reach!=max | 3 clamp-flip | 4 |dVMAX|>1 | 5 legacy IFL=2
-const CONDS = [["all profiles",0], ["top \u2260 max",1], ["reach \u2260 max",2],
-               ["clamp flip (E_top=0<E_max)",3], ["|\u0394VMAX| > 1 m/s",4],
-               ["legacy non-convergent",5]];
+// 0 all | 1 0!=top!=max | 2 0=top!=max | 3 reach!=max | 4 |dVMAX|>1 | 5 legacy
+// ("!=" at > 1 J/kg throughout)
+const CONDS = [["all profiles",0], ["0 \u2260 top \u2260 max",1],
+               ["0 = top \u2260 max",2], ["reach \u2260 max",3],
+               ["|\u0394VMAX| > 1 m/s",4], ["legacy non-convergent",5]];
 const CONVC = {top:"--c5", max:"--c1", first:"--c2", reach:"--c4"};  // red aqua yellow violet
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -210,16 +211,18 @@ function condPassMap(i){
   if (state.cond === 4) return DATA.map.gpi[i] === 2;
   if (state.cond === 5) return DATA.map.gpi[i] === 1;
   const g = DATA.map["g"+state.parcel][i];
-  if (state.cond === 1) return (g & 2) !== 0;   // |top-max| > 1 J/kg
-  if (state.cond === 2) return (g & 4) !== 0;   // |reach-max| > 1 J/kg
-  return (g & 1) !== 0;                          // clamp flip
+  // bit0: E_top = 0 while E_max > 0; bit1: |E_top-E_max| > 1 J/kg
+  if (state.cond === 1) return (g & 2) !== 0 && (g & 1) === 0;  // 0 != top != max
+  if (state.cond === 2) return (g & 2) !== 0 && (g & 1) !== 0;  // 0 = top != max
+  return (g & 4) !== 0;                                          // reach != max
 }
 function condPassPlayer(i){
   if (state.cond === 0) return true;
   const P = DATA.player, s = state.parcel;
-  if (state.cond === 1) return Math.abs(P["Etop"+s][i] - P["Emax"+s][i]) > 1;
-  if (state.cond === 2) return Math.abs(P["Ereach"+s][i] - P["Emax"+s][i]) > 1;
-  if (state.cond === 3) return P["Etop"+s][i] === 0 && P["Emax"+s][i] > 0;
+  const et = P["Etop"+s][i], em = P["Emax"+s][i];
+  if (state.cond === 1) return et > 0 && Math.abs(et - em) > 1;
+  if (state.cond === 2) return et === 0 && Math.abs(et - em) > 1;
+  if (state.cond === 3) return Math.abs(P["Ereach"+s][i] - em) > 1;
   if (state.cond === 4) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
                                Math.abs(P.Vtop[i] - P.Vmax[i]) > 1;
   return P.legfail[i] === 1;
