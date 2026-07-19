@@ -604,7 +604,16 @@ function buildChips(){
     host.appendChild(b);
   };
   mk("ALL",-1,null);
-  DATA.classes[state.parcel].forEach(([t,c,s],k)=> mk(t,k,s));
+  // adaptive chip list: under active filters, sort by filtered frequency and
+  // mask off empty classes (the selected class stays visible so it can be
+  // deselected); otherwise the canonical global-frequency order
+  let items = DATA.classes[state.parcel].map(([t, c, s], k) => ({t, k, s}));
+  if (live){
+    for (const it of items) it.n = live[it.k];
+    items.sort((a, b) => b.n - a.n);
+    items = items.filter(it => it.n > 0 || state.cls === it.k);
+  }
+  items.forEach(it => mk(it.t, it.k, it.s));
 }
 
 // ---------- engine ----------
