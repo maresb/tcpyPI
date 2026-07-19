@@ -61,7 +61,8 @@ def buoyancy(TP, RP, PP, T, R, P, nlvl, b):
 @njit(cache=True)
 def summarize(b, P, PP, nlvl, out):
     """out = [first_sign(+1/-1/0), n, E_top, E_max, E_first, E_reach,
-              clamped, clipped]"""
+              clamped, clipped, LNB_top, LNB_max, LNB_first, LNB_reach]
+    (LNB pressures in hPa; 0 where the convention returns zero CAPE)"""
     # ---- topology under the perturbation convention ----
     # effective sign sequence: skip zero values for the leading sign; a zero
     # value elsewhere adopts the '-' side as before (b>0 is '+')
@@ -87,6 +88,7 @@ def summarize(b, P, PP, nlvl, out):
     W = RD * (PP - P[0]) / (PP + P[0]) * b[0]
     ncand = 0
     cand_W = np.empty(nlvl + 1)
+    cand_P = np.empty(nlvl + 1)
     up_W = 0.0          # W entering the first positive region
     seen_pos = b[0] > 0.0
     if seen_pos:
@@ -103,6 +105,7 @@ def summarize(b, P, PP, nlvl, out):
             W += RD * b0 * (P[j - 1] - PC) / (P[j - 1] + PC)
             if b0 > 0.0:
                 cand_W[ncand] = W          # down-crossing candidate
+                cand_P[ncand] = PC
                 ncand += 1
             else:
                 if not have_up:
@@ -114,6 +117,7 @@ def summarize(b, P, PP, nlvl, out):
     top_pos = b[nlvl - 1] > 0.0
     if top_pos:
         cand_W[ncand] = W                  # profile-top candidate (clipped)
+        cand_P[ncand] = P[nlvl - 1]
         ncand += 1
     out[7] = 1.0 if top_pos else 0.0
 
@@ -125,6 +129,7 @@ def summarize(b, P, PP, nlvl, out):
     for kk in range(ncand):
         if cand_W[kk] > best:
             best = cand_W[kk]
+            out[9] = cand_P[kk]            # LNB_max
     out[3] = best
 
     # E_top: legacy requires a positive grid level above the launch node
@@ -139,10 +144,12 @@ def summarize(b, P, PP, nlvl, out):
             out[6] = 1.0
         else:
             out[2] = raw
+            out[8] = cand_P[ncand - 1]     # LNB_top
 
     # E_first
     if cand_W[0] > 0.0:
         out[4] = cand_W[0]
+        out[10] = cand_P[0]                # LNB_first
 
     # E_reach (lifted-ballistic): walk candidates; between candidate k and
     # k+1 the parcel traverses a negative region whose minimum W is the entry
@@ -166,6 +173,7 @@ def summarize(b, P, PP, nlvl, out):
             if b0 > 0.0:
                 if entered and not stalled and W2 > bestr:
                     bestr = W2
+                    out[11] = PC           # LNB_reach
             else:
                 if not entered:
                     entered = True
@@ -176,7 +184,12 @@ def summarize(b, P, PP, nlvl, out):
             W2 += RD * (b0 + b1) * (P[j - 1] - P[j]) / (P[j] + P[j - 1])
     if top_pos and entered and not stalled and W2 > bestr:
         bestr = W2
-    out[5] = bestr if bestr > 0.0 else 0.0
+        out[11] = P[nlvl - 1]
+    if bestr > 0.0:
+        out[5] = bestr
+    else:
+        out[5] = 0.0
+        out[11] = 0.0
 
 
 @njit(cache=True)
@@ -187,11 +200,11 @@ def pm_converged(SSTC, MSL, T, R, P, nlvl):
     SSTK = utilities.T_Ctok(SSTC)
     ES0 = utilities.es_cc(SSTC)
     b = np.empty(nlvl)
-    tmp = np.empty(8)
+    tmp = np.empty(12)
 
     # E_max-only cape via summarize (out[3])
     def _capemax(TP, RP, PP):
-        for q in range(8):
+        for q in range(12):
             tmp[q] = 0.0
         f = buoyancy(TP, RP, PP, T, R, P, nlvl, b)
         if f != 1:
@@ -213,7 +226,7 @@ def pm_converged(SSTC, MSL, T, R, P, nlvl):
         f = buoyancy(SSTK, RPS, PP, T, R, P, nlvl, b)
         if f != 1:
             return np.nan
-        for q in range(8):
+        for q in range(12):
             tmp[q] = 0.0
         summarize(b, P, PP, nlvl, tmp)
         CAPEMS = tmp[3]
@@ -285,9 +298,9 @@ def main():
     Rs = d["R"][:, :nlvl].copy()
     nprof = TCs.shape[0]
     PMs = np.full(nprof, np.nan)
-    outA = np.zeros((nprof, 8))
-    outB = np.zeros((nprof, 8))
-    outC = np.zeros((nprof, 8))
+    outA = np.zeros((nprof, 12))
+    outB = np.zeros((nprof, 12))
+    outC = np.zeros((nprof, 12))
 
     t0 = time.time()
     run(d["sst_C"][:50], d["sp_hPa"][:50], TCs[:50], Rs[:50], P, nlvl,
@@ -297,7 +310,8 @@ def main():
     np.savez_compressed(f"{SCRATCH}/parcel_topology_final.npz",
                         A=outA, B=outB, C=outC, PM=PMs,
                         cols=np.array(["first_sign", "n", "E_top", "E_max",
-                                       "E_first", "E_reach", "clamped", "clipped"]))
+                                       "E_first", "E_reach", "clamped", "clipped",
+                                       "LNB_top", "LNB_max", "LNB_first", "LNB_reach"]))
     print("saved parcel_topology_final.npz")
 
 

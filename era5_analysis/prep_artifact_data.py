@@ -21,6 +21,8 @@ _d = np.load(f"{SCRATCH}/profiles_converted.npz")
 d = {k: _d[k] for k in _d.files}
 _z = np.load(f"{SCRATCH}/parcel_topology_final.npz")
 z = {k: _z[k] for k in ("A", "B", "C", "PM")}
+_pc = np.load(f"{SCRATCH}/pi_conv_results.npz")
+PI = {k: _pc[k] for k in ("VMAX", "PMIN", "IFL")}  # (n, 4): top,max,first,reach
 P_full = d["P"]
 nlvl = int((P_full > PTOP).sum())
 P = P_full[:nlvl].copy()
@@ -75,6 +77,10 @@ rng = np.random.default_rng(42)
 
 # ---- player pool: ensure every top class of every parcel is represented ----
 pool = set(rng.choice(pop["A"], 1500, replace=False).tolist())
+# force-include the wild legacy non-convergence columns (IFL_top=2, IFL_max=1)
+legfail_rows = np.where((PI["IFL"][:, 0] == 2) & (PI["IFL"][:, 1] == 1) & mA)[0]
+pool.update(legfail_rows.tolist())
+print("legacy-failure columns force-included:", len(legfail_rows))
 for pname in "ABC":
     for t in tables[pname]:
         rows = pop[pname][allstrs[pname] == t]
@@ -114,15 +120,29 @@ player = {
 }
 for pname in "ABC":
     m = popmask[pname]
+    o = z[pname]
     player[f"c{pname}"] = [int(cls(pname, i)) for i in pool]
-    player[f"Etop{pname}"] = [int(round(z[pname][i, 2])) if m[i] else 0 for i in pool]
-    player[f"Emax{pname}"] = [int(round(z[pname][i, 3])) if m[i] else 0 for i in pool]
-    player[f"topo{pname}"] = [topo_str(z[pname][i, 0], z[pname][i, 1]) if m[i] else ""
+    for tag, col in (("Etop", 2), ("Emax", 3), ("Efirst", 4), ("Ereach", 5)):
+        player[f"{tag}{pname}"] = [int(round(o[i, col])) if m[i] else 0 for i in pool]
+    for tag, col in (("Ltop", 8), ("Lmax", 9), ("Lfirst", 10), ("Lreach", 11)):
+        player[f"{tag}{pname}"] = [round(float(o[i, col]), 1) if m[i] else 0 for i in pool]
+    player[f"topo{pname}"] = [topo_str(o[i, 0], o[i, 1]) if m[i] else ""
                               for i in pool]
     player[f"curve{pname}"] = curves[pname]
+# PI per convention for the column (ptop=50 tcpyPI convention; -1 = missing)
+for k, tag in enumerate(("top", "max", "first", "reach")):
+    player[f"V{tag}"] = [round(float(PI["VMAX"][i, k]), 1)
+                         if np.isfinite(PI["VMAX"][i, k]) else -1 for i in pool]
+player["Ptop"] = [round(float(PI["PMIN"][i, 0]), 1)
+                  if np.isfinite(PI["PMIN"][i, 0]) else -1 for i in pool]
+player["Pmax"] = [round(float(PI["PMIN"][i, 1]), 1)
+                  if np.isfinite(PI["PMIN"][i, 1]) else -1 for i in pool]
+player["legfail"] = [1 if (PI["IFL"][i, 0] == 2 and PI["IFL"][i, 1] == 1) else 0
+                     for i in pool]
 
 # ---- map layer ----
 msel = rng.choice(pop["A"], min(40000, len(pop["A"])), replace=False)
+msel = np.unique(np.concatenate([msel, legfail_rows]))
 mlon = np.where(d["lon"][msel] > 180, d["lon"][msel] - 360, d["lon"][msel])
 mappts = {
     "lat": [round(float(x), 2) for x in d["lat"][msel]],
@@ -133,6 +153,23 @@ mappts = {
 }
 for pname in "ABC":
     mappts[f"c{pname}"] = [int(cls(pname, i)) for i in msel]
+    # disagreement bitmask: 1 = E_top clamped to 0 while E_max>0; 2 = |dE|>10
+    o = z[pname]
+    m = popmask[pname]
+    g = []
+    for i in msel:
+        v = 0
+        if m[i]:
+            if o[i, 2] == 0.0 and o[i, 3] > 0.0:
+                v |= 1
+            if abs(o[i, 2] - o[i, 3]) > 10.0:
+                v |= 2
+        g.append(v)
+    mappts[f"g{pname}"] = g
+dv = np.abs(PI["VMAX"][msel, 0] - PI["VMAX"][msel, 1])
+mappts["gpi"] = [(1 if (PI["IFL"][i, 0] == 2 and PI["IFL"][i, 1] == 1) else
+                  (2 if (np.isfinite(dvv) and dvv > 1.0) else 0))
+                 for i, dvv in zip(msel, dv)]
 
 # per-parcel x-limits for the scope (tropospheric percentiles)
 # x-limits: lower bound = the most negative any curve goes BEFORE its last

@@ -106,6 +106,7 @@ footer b{color:var(--ink)}
     <span class="mono" id="spdv">5/s</span></label>
 </div>
 <div class="chips" id="chips" role="group" aria-label="topology filter"></div>
+<div class="chips" id="conds" role="group" aria-label="disagreement condition"></div>
 <div class="chips selrow" id="selrow" role="group" aria-label="marginal selections"></div>
 
 <div class="grid">
@@ -149,7 +150,13 @@ footer b{color:var(--ink)}
   the map selects a position (±1,500 km), the rings a day-of-year window
   (±15 days) or an hour-of-day window (±3 h UTC), the track a single year; each marginal keeps showing the
   density under the <i>other</i> filters, with its own selection dashed.
-  Click the × chips or press Escape to clear.
+  Click the × chips or press Escape to clear. The condition chips restrict
+  everything to profiles where the LNB conventions disagree: T/M/F/R lanes on
+  the scope mark each convention's LNB (T = legacy topmost, M = max-work,
+  F = first crossing, R = lifted-ballistic); CAPE and potential intensity per
+  convention appear in the readout (PI computed at tcpyPI's own ptop = 50).
+  The eight real columns where the legacy convention fails to converge are
+  included — select "legacy non-convergent" to see them.
 </footer>
 
 <script id="data" type="application/json">__DATA__</script>
@@ -164,6 +171,10 @@ const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], puls
   selHour:null,  // {h} with +/- HOUR_W hours (circular)
   selYear:null}; // {y}
 const RAD_KM = 1500, DOY_W = 15, HOUR_W = 3;
+state.cond = 0;   // 0 all | 1 clamp-flip | 2 |dE|>10 | 3 |dVMAX|>1 | 4 legacy IFL=2
+const CONDS = [["all profiles",0], ["E_top=0 < E_max",1], ["|E_top\u2212E_max| > 10 J/kg",2],
+               ["|\u0394VMAX| > 1 m/s",3], ["legacy non-convergent",4]];
+const CONVC = {top:"--c5", max:"--c1", first:"--c2", reach:"--c4"};  // red aqua yellow violet
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (reduced) state.playing = false;
@@ -192,6 +203,22 @@ function hourIn(h){
   return Math.min(dh, 24-dh) <= HOUR_W;
 }
 function yearIn(y){ return !state.selYear || y === state.selYear.y; }
+function condPassMap(i){
+  if (state.cond === 0) return true;
+  if (state.cond === 3) return DATA.map.gpi[i] === 2;
+  if (state.cond === 4) return DATA.map.gpi[i] === 1;
+  const g = DATA.map["g"+state.parcel][i];
+  return state.cond === 1 ? (g & 1) !== 0 : (g & 2) !== 0;
+}
+function condPassPlayer(i){
+  if (state.cond === 0) return true;
+  const P = DATA.player, s = state.parcel;
+  if (state.cond === 1) return P["Etop"+s][i] === 0 && P["Emax"+s][i] > 0;
+  if (state.cond === 2) return Math.abs(P["Etop"+s][i] - P["Emax"+s][i]) > 10;
+  if (state.cond === 3) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
+                               Math.abs(P.Vtop[i] - P.Vmax[i]) > 1;
+  return P.legfail[i] === 1;
+}
 // skip: which dimension NOT to apply (crossfilter: a marginal shows the
 // density under all the OTHER filters, with its own selection as an overlay)
 function passMap(i, skip){
@@ -202,7 +229,7 @@ function passMap(i, skip){
   if (skip !== "doy"  && !doyIn(DATA.map.doy[i])) return false;
   if (skip !== "hour" && !hourIn(DATA.map.hour[i])) return false;
   if (skip !== "year" && !yearIn(DATA.map.year[i])) return false;
-  return true;
+  return condPassMap(i);
 }
 
 // ---------- pools ----------
@@ -214,6 +241,7 @@ function pool(){
     if (state.cls >= 0 && cs[i] !== state.cls) continue;
     if (!posIn(P.lat[i], P.lon[i]) || !doyIn(P.doy[i]) ||
         !hourIn(P.hour[i]) || !yearIn(P.year[i])) continue;
+    if (!condPassPlayer(i)) continue;
     out.push(i);
   }
   return out;
@@ -230,7 +258,7 @@ function yOf(p, h, pad){ return pad + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(h-2*
 // ---------- scope ----------
 function drawScope(){
   const [cv,g] = ctx2("scope");
-  const W=cv.width, H=cv.height, padL=86, padR=26, padT=16, padB=52;
+  const W=cv.width, H=cv.height, padL=86, padR=130, padT=40, padB=52;
   g.clearRect(0,0,W,H);
   const [xlo,xhi] = DATA.xlims[state.parcel];
   const xOf = v => padL + (v-xlo)/(xhi-xlo)*(W-padL-padR);
@@ -272,13 +300,33 @@ function drawScope(){
   };
   state.trail.forEach((idx,k)=> drawCurve(idx, 0.05 + 0.10*k/Math.max(1,state.trail.length), 2));
   if (state.cur>=0) drawCurve(state.cur, 1, 4.5);
+  // LNB gutter: one lane per convention; a dot at each convention's LNB
+  if (state.cur>=0){
+    const s = state.parcel, i = state.cur, Pl = DATA.player;
+    const lanes = [["T","Ltop"], ["M","Lmax"], ["F","Lfirst"], ["R","Lreach"]];
+    const gx0 = W - padR + 18, lane = 26;
+    g.font = "20px ui-monospace, Menlo, monospace"; g.textAlign = "center";
+    lanes.forEach(([lab, key], k)=>{
+      const x = gx0 + k*lane;
+      const col = cvar(CONVC[key.slice(1).replace("L","")] || "--ink2");
+      g.fillStyle = cvar(CONVC[["top","max","first","reach"][k]]);
+      g.textBaseline = "bottom";
+      g.fillText(lab, x, padT - 8);
+      g.strokeStyle = cvar("--grid"); g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(x, padT); g.lineTo(x, H-padB); g.stroke();
+      const p = Pl[key + s][i];
+      if (p > 0){
+        g.beginPath(); g.arc(x, Y(p), 7, 0, 7); g.fill();
+      }
+    });
+  }
 }
 
 // ---------- map ----------
 const MEXT = {lo:-180, hi:180, la:-80, lb:90};
 let densCache = null, densKey = "";
 function buildDensity(){
-  const key = state.parcel+"|"+state.cls+"|"+cvar("--bg")+"|"+
+  const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+cvar("--bg")+"|"+
     JSON.stringify([state.selDoy, state.selHour, state.selYear]);
   if (key === densKey && densCache) return densCache;
   const bin = 2, nx = Math.ceil(360/bin), ny = Math.ceil((MEXT.lb-MEXT.la)/bin);
@@ -486,15 +534,22 @@ function updateReadout(){
   const dt = new Date(Date.UTC(P.year[i],0,1) + (P.doy[i]-1)*864e5)
       .toISOString().slice(0,10);
   const et=P["Etop"+s][i], em=P["Emax"+s][i];
+  const ef=P["Efirst"+s][i], er=P["Ereach"+s][i];
   const flip = em>0 && et===0;
   const hh = String(P.hour[i]).padStart(2,"0");
+  const L = k => { const v=P[k+s][i]; return v>0 ? v.toFixed(0) : "–"; };
+  const vt=P.Vtop[i], vm=P.Vmax[i];
+  const dpi = (vt>=0 && vm>=0) ? Math.abs(vt-vm) : 0;
+  const cc = k => cvar(CONVC[k]);
   el.innerHTML =
     `<div><span class="k">date</span><span>${dt} ${hh}Z</span></div>`+
-    `<div><span class="k">pos</span><span>${fmtLat(P.lat[i])} ${fmtLon(P.lon[i])}</span></div>`+
-    `<div><span class="k">SST</span><span>${P.sst[i].toFixed(1)} °C</span></div>`+
-    `<div><span class="k">topology</span><span>${P["topo"+s][i]}</span></div>`+
-    `<div><span class="k">E_max</span><span>${em} J/kg</span></div>`+
-    `<div><span class="k">E_top</span><span class="${flip?'flip':''}">${et} J/kg${flip?' ⚠':''}</span></div>`;
+    `<div><span class="k">pos · SST</span><span>${fmtLat(P.lat[i])} ${fmtLon(P.lon[i])} · ${P.sst[i].toFixed(1)}°C</span></div>`+
+    `<div><span class="k">topology</span><span>${P["topo"+s][i] || "–"}</span></div>`+
+    `<div><span class="k">VMAX top/max</span><span class="${dpi>1?'flip':''}">${vt<0?(P.legfail[i]? "IFL=2 ⚠":"–"):vt.toFixed(1)} / ${vm<0?"–":vm.toFixed(1)} m/s</span></div>`+
+    `<div><span class="k" style="color:${cc('top')}">T top</span><span class="${flip?'flip':''}">${et} J/kg @ ${L("Ltop")} hPa${flip?' ⚠':''}</span></div>`+
+    `<div><span class="k" style="color:${cc('max')}">M max</span><span>${em} J/kg @ ${L("Lmax")} hPa</span></div>`+
+    `<div><span class="k" style="color:${cc('first')}">F first</span><span>${ef} J/kg @ ${L("Lfirst")} hPa</span></div>`+
+    `<div><span class="k" style="color:${cc('reach')}">R reach</span><span>${er} J/kg @ ${L("Lreach")} hPa</span></div>`;
 }
 
 // ---------- chips ----------
@@ -589,6 +644,19 @@ function buildSelRow(){
     host.appendChild(c);
   }
 }
+function buildConds(){
+  const host = document.getElementById("conds");
+  host.innerHTML = "";
+  for (const [label, id] of CONDS){
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.setAttribute("aria-pressed", String(state.cond === id));
+    const t = document.createElement("span"); t.textContent = label; b.appendChild(t);
+    b.addEventListener("click", ()=>{ state.cond = id; buildConds(); invalidate();
+      buildSelRow(); tickOnce(); });
+    host.appendChild(b);
+  }
+}
 document.getElementById("map").addEventListener("click", e=>{
   const [cv] = ctx2("map");
   const [x,y] = evXY(cv, e);
@@ -663,5 +731,5 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change",
 
 document.getElementById("ntc").textContent = DATA.npop.A.toLocaleString("en-US");
 document.getElementById("nbc").textContent = DATA.npop.B.toLocaleString("en-US");
-buildChips(); tickOnce(); setTimer(); requestAnimationFrame(frame);
+buildChips(); buildConds(); tickOnce(); setTimer(); requestAnimationFrame(frame);
 </script>
