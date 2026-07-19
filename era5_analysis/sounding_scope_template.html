@@ -74,8 +74,13 @@ input[type=range]{accent-color:var(--c0); width:120px}
   color:var(--ink2); font-weight:600;
   font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace}
 canvas{display:block; width:100%; height:auto}
+#map,#ring,#hours,#years{cursor:crosshair}
+.selrow:empty{display:none}
+.selrow .chip{border-style:dashed}
+.selrow .x{margin-left:4px; font-weight:700; opacity:.7}
+.selrow .cnt{color:var(--ink2)}
 .rail{display:flex; flex-direction:column; gap:14px}
-.timerow{display:grid; grid-template-columns:190px 1fr; gap:14px}
+.timerow{display:grid; grid-template-columns:1fr 1fr; gap:14px}
 .readout{display:grid; grid-template-columns:repeat(2,1fr); gap:4px 18px; font-size:12.5px}
 .readout div{display:flex; justify-content:space-between; gap:8px; border-bottom:1px dashed var(--grid); padding:2px 0}
 .readout .k{color:var(--ink2)}
@@ -101,6 +106,7 @@ footer b{color:var(--ink)}
     <span class="mono" id="spdv">5/s</span></label>
 </div>
 <div class="chips" id="chips" role="group" aria-label="topology filter"></div>
+<div class="chips selrow" id="selrow" role="group" aria-label="marginal selections"></div>
 
 <div class="grid">
   <div class="panelbox">
@@ -118,10 +124,14 @@ footer b{color:var(--ink)}
         <canvas id="ring" width="360" height="360"></canvas>
       </div>
       <div class="panelbox">
-        <h2>year</h2>
-        <canvas id="years" width="600" height="360"></canvas>
-        <div class="readout mono" id="readout"></div>
+        <h2>hour of day (UTC)</h2>
+        <canvas id="hours" width="360" height="360"></canvas>
       </div>
+    </div>
+    <div class="panelbox">
+      <h2>year</h2>
+      <canvas id="years" width="1020" height="300"></canvas>
+      <div class="readout mono" id="readout"></div>
     </div>
   </div>
 </div>
@@ -135,7 +145,11 @@ footer b{color:var(--ink)}
   LNB (E_top) and the max-work LNB (E_max) — it turns red when the legacy rule
   returns zero for a convectively viable profile. Parcels: A = ambient air lifted
   as-is; B = boundary-layer air moisture-enriched by the storm's converged central
-  pressure; C = air saturated at the sea-surface temperature. Space bar toggles play.
+  pressure; C = air saturated at the sea-surface temperature. Space bar toggles play. <b>Click any marginal to filter the samples</b>:
+  the map selects a position (±1,500 km), the rings a day-of-year window
+  (±15 days) or an hour-of-day window (±3 h UTC), the track a single year; each marginal keeps showing the
+  density under the <i>other</i> filters, with its own selection dashed.
+  Click the × chips or press Escape to clear.
 </footer>
 
 <script id="data" type="application/json">__DATA__</script>
@@ -144,7 +158,12 @@ footer b{color:var(--ink)}
 const DATA = JSON.parse(document.getElementById("data").textContent);
 const PLV = DATA.P, NL = PLV.length;
 const MONL = ["J","F","M","A","M","J","J","A","S","O","N","D"];
-const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], pulses:[]};
+const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], pulses:[],
+  selPos:null,   // {lat, lon} with RAD_KM radius
+  selDoy:null,   // {d} with +/- DOY_W days (circular)
+  selHour:null,  // {h} with +/- HOUR_W hours (circular)
+  selYear:null}; // {y}
+const RAD_KM = 1500, DOY_W = 15, HOUR_W = 3;
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (reduced) state.playing = false;
@@ -152,13 +171,50 @@ if (reduced) state.playing = false;
 function cvar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function classColor(c){ return cvar("--c"+c); }
 
+// ---------- selection predicates ----------
+function havKm(la1, lo1, la2, lo2){
+  const r = Math.PI/180, R = 6371;
+  const a = Math.sin((la2-la1)*r/2)**2 +
+            Math.cos(la1*r)*Math.cos(la2*r)*Math.sin((lo2-lo1)*r/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function doyIn(d){
+  if (!state.selDoy) return true;
+  const dd = Math.abs(d - state.selDoy.d);
+  return Math.min(dd, 366-dd) <= DOY_W;
+}
+function posIn(la, lo){
+  return !state.selPos || havKm(la, lo, state.selPos.lat, state.selPos.lon) <= RAD_KM;
+}
+function hourIn(h){
+  if (!state.selHour) return true;
+  const dh = Math.abs(h - state.selHour.h);
+  return Math.min(dh, 24-dh) <= HOUR_W;
+}
+function yearIn(y){ return !state.selYear || y === state.selYear.y; }
+// skip: which dimension NOT to apply (crossfilter: a marginal shows the
+// density under all the OTHER filters, with its own selection as an overlay)
+function passMap(i, skip){
+  const v = DATA.map["c"+state.parcel][i];
+  if (v < 0) return false;
+  if (state.cls >= 0 && v !== state.cls) return false;
+  if (skip !== "pos"  && !posIn(DATA.map.lat[i], DATA.map.lon[i])) return false;
+  if (skip !== "doy"  && !doyIn(DATA.map.doy[i])) return false;
+  if (skip !== "hour" && !hourIn(DATA.map.hour[i])) return false;
+  if (skip !== "year" && !yearIn(DATA.map.year[i])) return false;
+  return true;
+}
+
 // ---------- pools ----------
 function pool(){
-  const cs = DATA.player["c"+state.parcel];
+  const cs = DATA.player["c"+state.parcel], P = DATA.player;
   const out=[];
   for (let i=0;i<cs.length;i++){
     if (cs[i] < 0) continue;                 // parcel undefined for this row
-    if (state.cls < 0 || cs[i] === state.cls) out.push(i);
+    if (state.cls >= 0 && cs[i] !== state.cls) continue;
+    if (!posIn(P.lat[i], P.lon[i]) || !doyIn(P.doy[i]) ||
+        !hourIn(P.hour[i]) || !yearIn(P.year[i])) continue;
+    out.push(i);
   }
   return out;
 }
@@ -222,16 +278,14 @@ function drawScope(){
 const MEXT = {lo:-180, hi:180, la:-80, lb:90};
 let densCache = null, densKey = "";
 function buildDensity(){
-  const key = state.parcel+"|"+state.cls+"|"+cvar("--bg");
+  const key = state.parcel+"|"+state.cls+"|"+cvar("--bg")+"|"+
+    JSON.stringify([state.selDoy, state.selHour, state.selYear]);
   if (key === densKey && densCache) return densCache;
   const bin = 2, nx = Math.ceil(360/bin), ny = Math.ceil((MEXT.lb-MEXT.la)/bin);
   const cnt = new Float32Array(nx*ny);
-  const cs = DATA.map["c"+state.parcel];
   const {lat,lon} = DATA.map;
   for (let i=0;i<lat.length;i++){
-    const v = cs[i];
-    if (v < 0) continue;
-    if (state.cls >= 0 && v !== state.cls) continue;
+    if (!passMap(i, "pos")) continue;
     const ix = Math.floor((lon[i]-MEXT.lo)/bin);
     const iy = Math.floor((lat[i]-MEXT.la)/bin);
     if (ix<0 || ix>=nx || iy<0 || iy>=ny) continue;   // drop, never clamp
@@ -268,6 +322,16 @@ function drawMap(now){
   }
   g.drawImage(buildDensity(),0,0);
   g.strokeStyle = cvar("--edge"); g.strokeRect(0.5,0.5,cv.width-1,cv.height-1);
+  if (state.selPos){
+    const Xs = (state.selPos.lon-MEXT.lo)/360*cv.width;
+    const Ys = (MEXT.lb-state.selPos.lat)/(MEXT.lb-MEXT.la)*cv.height;
+    const degR = RAD_KM/111.2;
+    const ry = degR/(MEXT.lb-MEXT.la)*cv.height;
+    const rx = degR/Math.max(0.2, Math.cos(state.selPos.lat*Math.PI/180))/360*cv.width;
+    g.strokeStyle = cvar("--ink"); g.lineWidth = 2.5; g.setLineDash([7,5]);
+    g.beginPath(); g.ellipse(Xs, Ys, rx, ry, 0, 0, 7); g.stroke();
+    g.setLineDash([]);
+  }
   // pulses
   const X = lo => (lo-MEXT.lo)/360*cv.width;
   const Yl = la => (MEXT.lb-la)/(MEXT.lb-MEXT.la)*cv.height;
@@ -288,11 +352,8 @@ function drawRing(now){
   const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
   g.clearRect(0,0,W,W);
   const nb=36, cnt=new Float32Array(nb);
-  const csr = DATA.map["c"+state.parcel];
   for (let i=0;i<DATA.map.doy.length;i++){
-    const v = csr[i];
-    if (v < 0) continue;
-    if (state.cls >= 0 && v !== state.cls) continue;
+    if (!passMap(i, "doy")) continue;
     cnt[Math.min(nb-1, Math.floor((DATA.map.doy[i]-1)/366*nb))]++;
   }
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
@@ -307,6 +368,12 @@ function drawRing(now){
   g.strokeStyle=cvar("--grid"); g.lineWidth=1.5;
   g.beginPath(); g.arc(C,C,r0,0,7); g.stroke();
   g.beginPath(); g.arc(C,C,r1,0,7); g.stroke();
+  if (state.selDoy){
+    const a0=-Math.PI/2 + ((state.selDoy.d-DOY_W-1)/366)*2*Math.PI;
+    const a1=-Math.PI/2 + ((state.selDoy.d+DOY_W)/366)*2*Math.PI;
+    g.strokeStyle=cvar("--ink"); g.lineWidth=5; g.globalAlpha=.8;
+    g.beginPath(); g.arc(C,C,r1+8,a0,a1); g.stroke(); g.globalAlpha=1;
+  }
   g.fillStyle=cvar("--ink2"); g.font="19px ui-monospace, Menlo, monospace";
   g.textAlign="center"; g.textBaseline="middle";
   for (let m=0;m<12;m++){
@@ -323,6 +390,50 @@ function drawRing(now){
   }
 }
 
+// ---------- hour-of-day ring ----------
+function drawHours(now){
+  const [cv,g] = ctx2("hours");
+  const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
+  g.clearRect(0,0,W,W);
+  const nb=24, cnt=new Float32Array(nb);
+  for (let i=0;i<DATA.map.hour.length;i++){
+    if (!passMap(i, "hour")) continue;
+    cnt[DATA.map.hour[i]]++;
+  }
+  let mx=1; for (const c of cnt) if (c>mx) mx=c;
+  const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
+  for (let k=0;k<nb;k++){
+    const a0=-Math.PI/2 + k/nb*2*Math.PI, a1=a0+2*Math.PI/nb*0.9;
+    const rr = r0 + (r1-r0)*Math.sqrt(cnt[k]/mx);
+    g.fillStyle = col; g.globalAlpha=0.85;
+    g.beginPath(); g.arc(C,C,rr,a0,a1); g.arc(C,C,r0,a1,a0,true); g.closePath(); g.fill();
+    g.globalAlpha=1;
+  }
+  g.strokeStyle=cvar("--grid"); g.lineWidth=1.5;
+  g.beginPath(); g.arc(C,C,r0,0,7); g.stroke();
+  g.beginPath(); g.arc(C,C,r1,0,7); g.stroke();
+  if (state.selHour){
+    const a0=-Math.PI/2 + ((state.selHour.h-HOUR_W)/24)*2*Math.PI;
+    const a1=-Math.PI/2 + ((state.selHour.h+HOUR_W+1)/24)*2*Math.PI;
+    g.strokeStyle=cvar("--ink"); g.lineWidth=5; g.globalAlpha=.8;
+    g.beginPath(); g.arc(C,C,r1+8,a0,a1); g.stroke(); g.globalAlpha=1;
+  }
+  g.fillStyle=cvar("--ink2"); g.font="19px ui-monospace, Menlo, monospace";
+  g.textAlign="center"; g.textBaseline="middle";
+  for (let h=0; h<24; h+=6){
+    const a=-Math.PI/2 + h/24*2*Math.PI;
+    g.fillText(String(h).padStart(2,"0"), C+Math.cos(a)*(r1+22), C+Math.sin(a)*(r1+22));
+  }
+  if (state.cur>=0){
+    const a=-Math.PI/2 + DATA.player.hour[state.cur]/24*2*Math.PI;
+    const flash = state.pulses.length? Math.max(0.4, 1-(now-state.pulses[state.pulses.length-1].t0)/1100):0.8;
+    g.fillStyle = classColor(DATA.player["c"+state.parcel][state.cur]);
+    g.globalAlpha = flash;
+    g.beginPath(); g.arc(C+Math.cos(a)*(r1+2), C+Math.sin(a)*(r1+2), 8, 0, 7); g.fill();
+    g.globalAlpha = 1;
+  }
+}
+
 // ---------- year track ----------
 function drawYears(now){
   const [cv,g] = ctx2("years");
@@ -330,11 +441,8 @@ function drawYears(now){
   g.clearRect(0,0,W,H);
   const [y0,y1] = DATA.years, ny=y1-y0+1;
   const cnt=new Float32Array(ny);
-  const csy = DATA.map["c"+state.parcel];
   for (let i=0;i<DATA.map.year.length;i++){
-    const v = csy[i];
-    if (v < 0) continue;
-    if (state.cls >= 0 && v !== state.cls) continue;
+    if (!passMap(i, "year")) continue;
     cnt[DATA.map.year[i]-y0]++;
   }
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
@@ -346,7 +454,13 @@ function drawYears(now){
     g.globalAlpha=0.85; g.fillRect(padL+k*bw+0.5, H-padB-h, Math.max(1,bw-1.5), h);
   }
   g.globalAlpha=1;
-  g.strokeStyle=cvar("--grid"); g.beginPath();
+  if (state.selYear){
+    const x=padL+(state.selYear.y-y0)*bw;
+    g.strokeStyle=cvar("--ink"); g.lineWidth=2.5; g.setLineDash([6,4]);
+    g.strokeRect(x+0.5, padT-4, bw-1, H-padT-padB+4);
+    g.setLineDash([]);
+  }
+  g.strokeStyle=cvar("--grid"); g.lineWidth=1; g.beginPath();
   g.moveTo(padL,H-padB+0.5); g.lineTo(W-padR,H-padB+0.5); g.stroke();
   g.fillStyle=cvar("--ink2"); g.font="19px ui-monospace, Menlo, monospace";
   g.textAlign="center"; g.textBaseline="top";
@@ -373,8 +487,9 @@ function updateReadout(){
       .toISOString().slice(0,10);
   const et=P["Etop"+s][i], em=P["Emax"+s][i];
   const flip = em>0 && et===0;
+  const hh = String(P.hour[i]).padStart(2,"0");
   el.innerHTML =
-    `<div><span class="k">date</span><span>${dt}</span></div>`+
+    `<div><span class="k">date</span><span>${dt} ${hh}Z</span></div>`+
     `<div><span class="k">pos</span><span>${fmtLat(P.lat[i])} ${fmtLon(P.lon[i])}</span></div>`+
     `<div><span class="k">SST</span><span>${P.sst[i].toFixed(1)} °C</span></div>`+
     `<div><span class="k">topology</span><span>${P["topo"+s][i]}</span></div>`+
@@ -399,7 +514,8 @@ function buildChips(){
       const p=document.createElement("span"); p.className="pct";
       p.textContent=share.toFixed(1)+"%"; b.appendChild(p);
     }
-    b.addEventListener("click",()=>{ state.cls=cls; buildChips(); invalidate(); tickOnce(); });
+    b.addEventListener("click",()=>{ state.cls=cls; buildChips(); invalidate();
+      buildSelRow(); tickOnce(); });
     host.appendChild(b);
   };
   mk("ALL",-1,null);
@@ -428,16 +544,102 @@ function setTimer(){
 }
 function frame(){
   const now=performance.now();
-  drawMap(now); drawRing(now); drawYears(now);
+  drawMap(now); drawRing(now); drawHours(now); drawYears(now);
   requestAnimationFrame(frame);
 }
+
+// ---------- marginal selection: click handlers ----------
+function evXY(cv, e){
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height];
+}
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function doyLabel(d){
+  const dt = new Date(Date.UTC(2001,0,1)+(d-1)*864e5);
+  return MONTHS[dt.getUTCMonth()]+" "+String(dt.getUTCDate()).padStart(2,"0");
+}
+function selChanged(){ invalidate(); buildSelRow(); tickOnce(); }
+function buildSelRow(){
+  const host = document.getElementById("selrow");
+  host.innerHTML = "";
+  const mk = (label, clear) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    const t = document.createElement("span"); t.className="mono"; t.textContent = label;
+    const x = document.createElement("span"); x.className="x"; x.textContent = "\u00d7";
+    b.append(t, x);
+    b.addEventListener("click", ()=>{ clear(); selChanged(); });
+    host.appendChild(b);
+  };
+  if (state.selPos)
+    mk(`pos ${fmtLat(state.selPos.lat)} ${fmtLon(state.selPos.lon)} \u00b1${RAD_KM} km`,
+       ()=> state.selPos = null);
+  if (state.selDoy)
+    mk(`doy ${doyLabel(state.selDoy.d)} \u00b1${DOY_W}d`, ()=> state.selDoy = null);
+  if (state.selHour)
+    mk(`hour ${String(state.selHour.h).padStart(2,"0")}Z \u00b1${HOUR_W}h`,
+       ()=> state.selHour = null);
+  if (state.selYear)
+    mk(`year ${state.selYear.y}`, ()=> state.selYear = null);
+  if (state.selPos || state.selDoy || state.selYear){
+    const n = pool().length;
+    const c = document.createElement("span");
+    c.className = "chip cnt mono";
+    c.textContent = `${n} matching sample${n===1?"":"s"}`;
+    host.appendChild(c);
+  }
+}
+document.getElementById("map").addEventListener("click", e=>{
+  const [cv] = ctx2("map");
+  const [x,y] = evXY(cv, e);
+  state.selPos = {lat: +(MEXT.lb - y/cv.height*(MEXT.lb-MEXT.la)).toFixed(1),
+                  lon: +(MEXT.lo + x/cv.width*360).toFixed(1)};
+  selChanged();
+});
+document.getElementById("ring").addEventListener("click", e=>{
+  const [cv] = ctx2("ring");
+  const [x,y] = evXY(cv, e);
+  const C = cv.width/2, dx = x-C, dy = y-C, rr = Math.hypot(dx,dy);
+  if (rr < cv.width*0.12){ state.selDoy = null; selChanged(); return; }
+  let a = Math.atan2(dy,dx) + Math.PI/2;         // 0 at top, clockwise
+  if (a < 0) a += 2*Math.PI;
+  state.selDoy = {d: Math.min(366, Math.max(1, Math.round(a/(2*Math.PI)*366)+1))};
+  selChanged();
+});
+document.getElementById("hours").addEventListener("click", e=>{
+  const [cv] = ctx2("hours");
+  const [x,y] = evXY(cv, e);
+  const C = cv.width/2, dx = x-C, dy = y-C, rr = Math.hypot(dx,dy);
+  if (rr < cv.width*0.12){ state.selHour = null; selChanged(); return; }
+  let a = Math.atan2(dy,dx) + Math.PI/2;
+  if (a < 0) a += 2*Math.PI;
+  state.selHour = {h: Math.round(a/(2*Math.PI)*24) % 24};
+  selChanged();
+});
+document.getElementById("years").addEventListener("click", e=>{
+  const [cv] = ctx2("years");
+  const [x] = evXY(cv, e);
+  const padL=16, padR=16;
+  const [y0,y1] = DATA.years, ny=y1-y0+1;
+  const k = Math.floor((x-padL)/((cv.width-padL-padR)/ny));
+  if (k < 0 || k >= ny){ state.selYear = null; }
+  else state.selYear = {y: y0+k};
+  selChanged();
+});
+addEventListener("keydown", e=>{
+  if (e.key === "Escape" &&
+      (state.selPos || state.selDoy || state.selHour || state.selYear)){
+    state.selPos = state.selDoy = state.selHour = state.selYear = null;
+    selChanged();
+  }
+});
 
 document.querySelectorAll("[data-parcel]").forEach(b=>{
   b.addEventListener("click",()=>{
     state.parcel=b.dataset.parcel; state.cls=-1; state.trail=[];
     document.querySelectorAll("[data-parcel]").forEach(x=>
       x.setAttribute("aria-pressed", String(x===b)));
-    buildChips(); invalidate(); drawScope(); tickOnce();
+    buildChips(); invalidate(); buildSelRow(); drawScope(); tickOnce();
   });
 });
 document.getElementById("play").addEventListener("click",()=>{

@@ -109,6 +109,7 @@ player = {
     "lon": [round(float(x), 2) for x in lonw],
     "year": [int(x) for x in years[pool]],
     "doy": [int(x) for x in doy[pool]],
+    "hour": [int(x) for x in ((d["time"][pool] // 3600) % 24)],
     "sst": [round(float(x), 1) for x in d["sst_C"][pool]],
 }
 for pname in "ABC":
@@ -128,6 +129,7 @@ mappts = {
     "lon": [round(float(x), 2) for x in mlon],
     "doy": [int(x) for x in doy[msel]],
     "year": [int(x) for x in years[msel]],
+    "hour": [int(x) for x in ((d["time"][msel] // 3600) % 24)],
 }
 for pname in "ABC":
     mappts[f"c{pname}"] = [int(cls(pname, i)) for i in msel]
