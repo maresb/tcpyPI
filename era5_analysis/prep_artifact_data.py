@@ -90,6 +90,15 @@ pool = set(rng.choice(pop["A"], 14000, replace=False).tolist())
 legfail_rows = np.where((PI["IFL"][:, 0] == 2) & (PI["IFL"][:, 1] == 1) & mA)[0]
 pool.update(legfail_rows.tolist())
 print("legacy-failure columns force-included:", len(legfail_rows))
+# force flip-book coverage of the extreme convention gaps (capped)
+with np.errstate(invalid="ignore"):
+    _dv = PI["VMAX"][:, 1] - PI["VMAX"][:, 0]
+for _m in (np.isfinite(_dv) & (_dv > 8.0) & mA,
+           np.isfinite(_dv) & (_dv < -2.0) & mA):
+    _rows = np.where(_m)[0]
+    if len(_rows) > 400:
+        _rows = rng.choice(_rows, 400, replace=False)
+    pool.update(_rows.tolist())
 for pname in "ABC":
     for t in tables[pname]:
         rows = pop[pname][allstrs[pname] == t]
@@ -179,10 +188,15 @@ for tag, k in (("top", 0), ("max", 1), ("reach", 3)):
     V = PI["VMAX"][:, k]
     vq[tag] = np.where(np.isfinite(V), np.round(V * 10), -10).astype("<i2")
 legf = (PI["IFL"][:, 0] == 2) & (PI["IFL"][:, 1] == 1) & mA
+# signed convention gap dv = VMAX(max) - VMAX(top): large positive = the
+# legacy clamp suppressing real PI; negative = top exceeding max
 with np.errstate(invalid="ignore"):
-    dv_all = np.abs(PI["VMAX"][:, 0] - PI["VMAX"][:, 1])
-    big = np.isfinite(dv_all) & (dv_all > 1.0)
-gpi_all = np.where(legf, 1, np.where(big, 2, 0)).astype(np.uint8)
+    dv_all = PI["VMAX"][:, 1] - PI["VMAX"][:, 0]
+    dv_hi = np.isfinite(dv_all) & (dv_all > 8.0)
+    dv_lo = np.isfinite(dv_all) & (dv_all < -2.0)
+gpi_all = np.where(legf, 1, np.where(dv_hi, 2,
+                   np.where(dv_lo, 3, 0))).astype(np.uint8)
+print("dv>8:", int(dv_hi.sum()), " dv<-2:", int(dv_lo.sum()))
 
 # int16 columns first so every offset stays 2-byte aligned
 bincols = [

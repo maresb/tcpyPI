@@ -238,7 +238,8 @@ state.cond = 0;
 // ("!=" at > 1 J/kg throughout)
 const CONDS = [["all profiles",0], ["0 \u2260 top \u2260 max",1],
                ["0 = top \u2260 max",2], ["reach \u2260 max",3],
-               ["|\u0394VMAX| > 1 m/s",4], ["top non-convergent",5]];
+               ["\u0394VMAX > +8 m/s",4], ["\u0394VMAX < \u22122 m/s",6],
+               ["top non-convergent",5]];
 const CONVC = {top:"--c5", max:"--c1", first:"--c2", reach:"--c4"};  // red aqua yellow violet
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -277,6 +278,7 @@ function piIn(vt, vm, vr){
 function condPassMap(i){
   if (state.cond === 0) return true;
   if (state.cond === 4) return DATA.map.gpi[i] === 2;
+  if (state.cond === 6) return DATA.map.gpi[i] === 3;
   if (state.cond === 5) return DATA.map.gpi[i] === 1;
   const g = DATA.map["g"+state.parcel][i];
   // bit0: E_top = 0 while E_max > 0; bit1: |E_top-E_max| > 1 J/kg
@@ -291,8 +293,11 @@ function condPassPlayer(i){
   if (state.cond === 1) return et > 0 && Math.abs(et - em) > 1;
   if (state.cond === 2) return et === 0 && Math.abs(et - em) > 1;
   if (state.cond === 3) return Math.abs(P["Ereach"+s][i] - em) > 1;
+  // signed gap: dv = VMAX(max) - VMAX(top)
   if (state.cond === 4) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
-                               Math.abs(P.Vtop[i] - P.Vmax[i]) > 1;
+                               P.Vmax[i] - P.Vtop[i] > 8;
+  if (state.cond === 6) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
+                               P.Vmax[i] - P.Vtop[i] < -2;
   return P.legfail[i] === 1;
 }
 // skip: which dimension NOT to apply (crossfilter: a marginal shows the
@@ -708,8 +713,8 @@ function drawOneScatter(id, Vy, colv){
       else { og.beginPath(); og.arc(X(x), Y(d), 3.0, 0, 7); og.fill(); }
     }
     if (dense){
-      // same data, second pass: |delta| > 1 m/s (the disagreement-chip
-      // threshold) drawn opaque so outliers survive the dense cloud
+      // same data, second pass: |delta| > 1 m/s drawn opaque so
+      // outliers survive the dense cloud (display emphasis only)
       og.globalAlpha = 0.45;
       for (const [x,d] of pts)
         if (Math.abs(d) > 1) og.fillRect(X(x)-1.25, Y(d)-1.25, 2.5, 2.5);
