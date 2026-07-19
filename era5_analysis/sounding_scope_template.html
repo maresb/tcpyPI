@@ -167,8 +167,11 @@ footer b{color:var(--ink)}
   density under the <i>other</i> filters, with its own selection dashed.
   Click the × chips or press Escape to clear; on the &Delta;VMAX panels,
   clicking inside the current selection rectangle also clears it. The condition chips restrict
-  everything to profiles where the LNB conventions disagree: T/M/R lanes on
-  the scope mark the LNB under top, max, and reach (the first-crossing
+  everything to profiles where the LNB conventions disagree: The OTL arrow on the
+  scope's pressure axis marks the storm outflow level — parcel C's LNB under
+  max, the one that sets T<sub>O</sub> in the PI formulas — for every profile,
+  whichever parcel is selected. T/M/R lanes
+  mark the selected parcel's LNB under top, max, and reach (the first-crossing
   convention is omitted — it is materially wrong too often to be
   interesting); CAPE and potential intensity per
   convention appear in the readout (PI computed at tcpyPI's own ptop = 50).
@@ -355,6 +358,22 @@ function drawScope(){
     }
   }
   if (state.cur>=0) drawCurve(state.cur, 1, 4.5);
+  // outflow marker: the storm's outflow level is parcel C's max-work LNB
+  // (this is the LNB that sets T_O in the PI formulas) -- always shown,
+  // whichever parcel is selected
+  if (state.cur>=0){
+    const potl = DATA.player.LmaxC[state.cur];
+    if (potl > 0){
+      const y = Y(potl);
+      g.fillStyle = cvar("--ink2");
+      g.beginPath();
+      g.moveTo(padL, y); g.lineTo(padL-12, y-7); g.lineTo(padL-12, y+7);
+      g.closePath(); g.fill();
+      g.font = "17px ui-monospace, Menlo, monospace";
+      g.textAlign = "right"; g.textBaseline = "bottom";
+      g.fillText("OTL", padL-14, y-8);
+    }
+  }
   // LNB gutter: one lane per convention; a dot at each convention's LNB
   if (state.cur>=0){
     const s = state.parcel, i = state.cur, Pl = DATA.player;
