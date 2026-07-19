@@ -169,6 +169,11 @@ for pname in "ABC":
                 v |= 4
         g.append(v)
     mappts[f"g{pname}"] = g
+# VMAX per convention for the scatter (-1 = missing/non-convergent)
+for k, tag in enumerate(("top", "max", "reach")):
+    kk = {"top": 0, "max": 1, "reach": 3}[tag]
+    mappts[f"V{tag}"] = [round(float(PI["VMAX"][i, kk]), 1)
+                         if np.isfinite(PI["VMAX"][i, kk]) else -1 for i in msel]
 dv = np.abs(PI["VMAX"][msel, 0] - PI["VMAX"][msel, 1])
 mappts["gpi"] = [(1 if (PI["IFL"][i, 0] == 2 and PI["IFL"][i, 1] == 1) else
                   (2 if (np.isfinite(dvv) and dvv > 1.0) else 0))

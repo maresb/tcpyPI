@@ -75,6 +75,7 @@ input[type=range]{accent-color:var(--c0); width:120px}
   font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace}
 canvas{display:block; width:100%; height:auto}
 #map,#ring,#hours,#years{cursor:crosshair}
+#piscatter{cursor:default}
 .selrow .chip{border-style:dashed}
 .selrow .x{margin-left:4px; font-weight:700; opacity:.7}
 .selrow .cnt{color:var(--ink2)}
@@ -132,6 +133,10 @@ footer b{color:var(--ink)}
       <h2>year</h2>
       <canvas id="years" width="1020" height="300"></canvas>
       <div class="readout mono" id="readout"></div>
+    </div>
+    <div class="panelbox">
+      <h2>potential intensity by convention — x: legacy topmost · y: max-work / ballistic</h2>
+      <canvas id="piscatter" width="1020" height="560"></canvas>
     </div>
   </div>
 </div>
@@ -532,6 +537,79 @@ function drawYears(now){
   }
 }
 
+// ---------- PI scatter (x = VMAX_top; y = VMAX_max and VMAX_reach) ----------
+let scatCache = null, scatKey = "";
+let AXMAX = 0;
+function drawScatter(){
+  const [cv,g] = ctx2("piscatter");
+  const W=cv.width, H=cv.height, padL=76, padR=20, padT=14, padB=64;
+  if (!AXMAX){
+    let mx = 0;
+    for (const k of ["Vtop","Vmax","Vreach"])
+      for (const v of DATA.map[k]) if (v > mx) mx = v;
+    AXMAX = Math.ceil(mx/10)*10;
+  }
+  const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+cvar("--bg")+"|"+
+    JSON.stringify([state.selPos, state.selDoy, state.selHour, state.selYear]);
+  if (key !== scatKey || !scatCache){
+    const off = document.createElement("canvas");
+    off.width = W; off.height = H;
+    const og = off.getContext("2d");
+    const X = v => padL + v/AXMAX*(W-padL-padR);
+    const Y = v => H-padB - v/AXMAX*(H-padT-padB);
+    og.font = "20px ui-monospace, Menlo, monospace";
+    og.strokeStyle = cvar("--grid"); og.fillStyle = cvar("--ink2"); og.lineWidth = 1.4;
+    for (let v=0; v<=AXMAX; v+=20){
+      og.beginPath(); og.moveTo(X(v),padT); og.lineTo(X(v),H-padB); og.stroke();
+      og.beginPath(); og.moveTo(padL,Y(v)); og.lineTo(W-padR,Y(v)); og.stroke();
+      og.textAlign="center"; og.textBaseline="top"; og.fillText(String(v), X(v), H-padB+8);
+      og.textAlign="right"; og.textBaseline="middle"; og.fillText(String(v), padL-8, Y(v));
+    }
+    og.textAlign="center";
+    og.fillText("VMAX, legacy topmost LNB [m/s]", (padL+W-padR)/2, H-padB+34);
+    og.save(); og.translate(20,(padT+H-padB)/2); og.rotate(-Math.PI/2);
+    og.textAlign="center"; og.fillText("VMAX, alternative LNB [m/s]", 0, 0); og.restore();
+    // light diagonal reference
+    og.strokeStyle = cvar("--ink2"); og.globalAlpha = 0.45; og.lineWidth = 1.6;
+    og.setLineDash([6,5]);
+    og.beginPath(); og.moveTo(X(0),Y(0)); og.lineTo(X(AXMAX),Y(AXMAX)); og.stroke();
+    og.setLineDash([]); og.globalAlpha = 1;
+    // points: every map point passing ALL filters
+    const Vt = DATA.map.Vtop, Vm = DATA.map.Vmax, Vr = DATA.map.Vreach;
+    for (const [Vy, colv] of [[Vm,"--c1"], [Vr,"--c4"]]){
+      og.fillStyle = cvar(colv); og.globalAlpha = 0.35;
+      for (let i=0;i<Vt.length;i++){
+        if (!passMap(i)) continue;
+        if (Vt[i] < 0 || Vy[i] < 0) continue;
+        og.beginPath(); og.arc(X(Vt[i]), Y(Vy[i]), 3.2, 0, 7); og.fill();
+      }
+      og.globalAlpha = 1;
+    }
+    // legend
+    og.textAlign = "left"; og.textBaseline = "middle";
+    og.fillStyle = cvar("--c1"); og.fillRect(padL+14, padT+10, 12, 12);
+    og.fillStyle = cvar("--ink2"); og.fillText("max-work", padL+32, padT+16);
+    og.fillStyle = cvar("--c4"); og.fillRect(padL+14, padT+34, 12, 12);
+    og.fillStyle = cvar("--ink2"); og.fillText("lifted-ballistic", padL+32, padT+40);
+    scatCache = off; scatKey = key;
+  }
+  g.clearRect(0,0,W,H);
+  g.drawImage(scatCache,0,0);
+  // current profile highlight
+  if (state.cur>=0){
+    const P = DATA.player, i = state.cur;
+    const X = v => padL + v/AXMAX*(W-padL-padR);
+    const Y = v => H-padB - v/AXMAX*(H-padT-padB);
+    if (P.Vtop[i] >= 0){
+      for (const [vy, colv] of [[P.Vmax[i],"--c1"], [P.Vreach[i],"--c4"]]){
+        if (vy < 0) continue;
+        g.strokeStyle = cvar(colv); g.lineWidth = 3;
+        g.beginPath(); g.arc(X(P.Vtop[i]), Y(vy), 8, 0, 7); g.stroke();
+      }
+    }
+  }
+}
+
 // ---------- readout ----------
 const FSP = "\u2007";  // figure space: digit-wide, keeps the layout stable
 function fmtLat(v){ return Math.abs(v).toFixed(1).padStart(4,FSP)+"°"+(v>=0?"N":"S"); }
@@ -620,7 +698,7 @@ function buildChips(){
 
 // ---------- engine ----------
 let timer=null;
-function invalidate(){ densKey=""; }
+function invalidate(){ densKey=""; scatKey=""; }
 function tickOnce(){
   const p = pool();
   if (!p.length) return;
@@ -640,7 +718,7 @@ function setTimer(){
 }
 function frame(){
   const now=performance.now();
-  drawMap(now); drawRing(now); drawHours(now); drawYears(now);
+  drawMap(now); drawRing(now); drawHours(now); drawYears(now); drawScatter();
   requestAnimationFrame(frame);
 }
 
