@@ -230,7 +230,7 @@ function condPassPlayer(i){
 function passMap(i, skip){
   const v = DATA.map["c"+state.parcel][i];
   if (v < 0) return false;
-  if (state.cls >= 0 && v !== state.cls) return false;
+  if (skip !== "cls" && state.cls >= 0 && v !== state.cls) return false;
   if (skip !== "pos"  && !posIn(DATA.map.lat[i], DATA.map.lon[i])) return false;
   if (skip !== "doy"  && !doyIn(DATA.map.doy[i])) return false;
   if (skip !== "hour" && !hourIn(DATA.map.hour[i])) return false;
@@ -560,9 +560,27 @@ function updateReadout(){
 }
 
 // ---------- chips ----------
+function anyFilter(){
+  return !!(state.selPos || state.selDoy || state.selHour || state.selYear)
+         || state.cond !== 0;
+}
+function chipShares(){
+  // live topology distribution under all OTHER filters (crossfilter: the
+  // chip row is itself a marginal, so its own selection is not applied)
+  const cnt = new Float32Array(8);
+  let tot = 0;
+  const cs = DATA.map["c"+state.parcel];
+  for (let i=0;i<cs.length;i++){
+    if (!passMap(i, "cls")) continue;
+    cnt[cs[i]]++; tot++;
+  }
+  return [cnt, tot];
+}
 function buildChips(){
   const host=document.getElementById("chips");
   host.innerHTML="";
+  let live = null, ltot = 0;
+  if (anyFilter()){ [live, ltot] = chipShares(); }
   const mk=(label,cls,share)=>{
     const b=document.createElement("button");
     b.className="chip"; b.setAttribute("aria-pressed", String(state.cls===cls));
@@ -574,7 +592,12 @@ function buildChips(){
     b.appendChild(t);
     if (share!=null){
       const p=document.createElement("span"); p.className="pct";
-      p.textContent=share.toFixed(1)+"%"; b.appendChild(p);
+      if (live){
+        p.textContent = ltot ? (100*live[cls]/ltot).toFixed(1)+"%" : "\u2013";
+      } else {
+        p.textContent = share.toFixed(1)+"%";
+      }
+      b.appendChild(p);
     }
     b.addEventListener("click",()=>{ state.cls=cls; buildChips(); invalidate();
       buildSelRow(); tickOnce(); });
@@ -620,7 +643,7 @@ function doyLabel(d){
   const dt = new Date(Date.UTC(2001,0,1)+(d-1)*864e5);
   return MONTHS[dt.getUTCMonth()]+" "+String(dt.getUTCDate()).padStart(2,"0");
 }
-function selChanged(){ invalidate(); buildSelRow(); tickOnce(); }
+function selChanged(){ invalidate(); buildChips(); buildSelRow(); tickOnce(); }
 function buildSelRow(){
   const host = document.getElementById("selrow");
   host.innerHTML = "";
@@ -660,7 +683,7 @@ function buildConds(){
     b.setAttribute("aria-pressed", String(state.cond === id));
     const t = document.createElement("span"); t.textContent = label; b.appendChild(t);
     b.addEventListener("click", ()=>{ state.cond = id; buildConds(); invalidate();
-      buildSelRow(); tickOnce(); });
+      buildChips(); buildSelRow(); tickOnce(); });
     host.appendChild(b);
   }
 }
