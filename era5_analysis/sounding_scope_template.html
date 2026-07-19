@@ -158,7 +158,10 @@ footer b{color:var(--ink)}
   <b>reach</b> (ballistic coasting from the LFC): the readout turns red when top
   returns zero for a convectively viable profile. Parcels: A = ambient air lifted
   as-is; B = boundary-layer air moisture-enriched by the storm's converged central
-  pressure; C = air saturated at the sea-surface temperature. Space bar toggles play. <b>Click any marginal to filter the samples</b>:
+  pressure; C = air saturated at the sea-surface temperature. VMAX&sup2; &prop;
+  (SST/T<sub>O</sub>)(E<sub>C</sub> &minus; E<sub>B</sub>), so with B or C
+  selected the other of the pair is drawn thin and dashed: the PI winds live in
+  the gap between those two curves. Space bar toggles play. <b>Click any marginal to filter the samples</b>:
   the map selects a position (±1,500 km), the rings a day-of-year window
   (±15 days) or an hour-of-day window (±3 h UTC), the track a single year; each marginal keeps showing the
   density under the <i>other</i> filters, with its own selection dashed.
@@ -330,6 +333,26 @@ function drawScope(){
     g.stroke(); g.restore();
   };
   state.trail.forEach((idx,k)=> drawCurve(idx, 0.05 + 0.10*k/Math.max(1,state.trail.length), 2));
+  // companion curve: VMAX^2 ~ (SST/T_O)(E_C - E_B), so when B or C is
+  // selected, draw the other of the pair thin for the same profile --
+  // the PI winds live in the gap between these two curves
+  if (state.cur>=0 && (state.parcel === "B" || state.parcel === "C")){
+    const comp = state.parcel === "B" ? "C" : "B";
+    const ccurve = DATA.player["curve"+comp][state.cur];
+    const ccls = DATA.player["c"+comp][state.cur];
+    if (ccurve.length && ccls >= 0){
+      g.save();
+      g.beginPath(); g.rect(padL, padT, W-padL-padR, H-padT-padB); g.clip();
+      g.strokeStyle = classColor(ccls); g.globalAlpha = 0.5; g.lineWidth = 2;
+      g.setLineDash([8,5]);
+      g.beginPath();
+      for (let j=0;j<NL;j++){
+        const x = xOf(ccurve[j]), y = Y(PLV[j]);
+        if (j===0) g.moveTo(x,y); else g.lineTo(x,y);
+      }
+      g.stroke(); g.setLineDash([]); g.restore(); g.globalAlpha = 1;
+    }
+  }
   if (state.cur>=0) drawCurve(state.cur, 1, 4.5);
   // LNB gutter: one lane per convention; a dot at each convention's LNB
   if (state.cur>=0){
