@@ -75,7 +75,6 @@ input[type=range]{accent-color:var(--c0); width:120px}
   font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace}
 canvas{display:block; width:100%; height:auto}
 #map,#ring,#hours,#years{cursor:crosshair}
-.selrow:empty{display:none}
 .selrow .chip{border-style:dashed}
 .selrow .x{margin-left:4px; font-weight:700; opacity:.7}
 .selrow .cnt{color:var(--ink2)}
@@ -227,7 +226,7 @@ function condPassPlayer(i){
 }
 // skip: which dimension NOT to apply (crossfilter: a marginal shows the
 // density under all the OTHER filters, with its own selection as an overlay)
-function passMap(i, skip){
+function passMap(i, skip=""){
   const v = DATA.map["c"+state.parcel][i];
   if (v < 0) return false;
   if (skip !== "cls" && state.cls >= 0 && v !== state.cls) return false;
@@ -675,13 +674,24 @@ function buildSelRow(){
        ()=> state.selHour = null);
   if (state.selYear)
     mk(`year ${state.selYear.y}`, ()=> state.selYear = null);
-  if (state.selPos || state.selDoy || state.selYear){
-    const n = pool().length;
-    const c = document.createElement("span");
-    c.className = "chip cnt mono";
-    c.textContent = `${n} matching sample${n===1?"":"s"}`;
-    host.appendChild(c);
+  // matching counts are always shown: they reflect ALL active filters
+  // (parcel, topology, condition, and any marginal selections)
+  const n = pool().length;
+  let m = 0, tot = 0;
+  const csAll = DATA.map["c"+state.parcel];
+  for (let i=0;i<DATA.map.lat.length;i++){
+    if (csAll[i] >= 0) tot++;
+    if (passMap(i)) m++;
   }
+  // retained share of the parcel's population, with adaptive precision so
+  // tiny fractions stay visible (e.g. the 8 legacy failures ~ 0.020%)
+  const pct = tot ? 100*m/tot : 0;
+  const pctStr = pct === 0 ? "0" : (pct >= 0.1 ? pct.toFixed(1) : pct.toPrecision(2));
+  const c = document.createElement("span");
+  c.className = "chip cnt mono";
+  c.textContent = `${n} flip sample${n===1?"":"s"} \u00b7 `+
+    `${m.toLocaleString("en-US")} map pts \u00b7 ${pctStr}% retained`;
+  host.appendChild(c);
 }
 function buildConds(){
   const host = document.getElementById("conds");
@@ -770,5 +780,5 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change",
 
 document.getElementById("ntc").textContent = DATA.npop.A.toLocaleString("en-US");
 document.getElementById("nbc").textContent = DATA.npop.B.toLocaleString("en-US");
-buildChips(); buildConds(); tickOnce(); setTimer(); requestAnimationFrame(frame);
+buildChips(); buildConds(); buildSelRow(); tickOnce(); setTimer(); requestAnimationFrame(frame);
 </script>
