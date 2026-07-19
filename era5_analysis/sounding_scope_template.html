@@ -75,7 +75,7 @@ input[type=range]{accent-color:var(--c0); width:120px}
   font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace}
 canvas{display:block; width:100%; height:auto}
 #map,#ring,#hours,#years{cursor:crosshair}
-#scatmax,#scatreach{cursor:default}
+#scatmax,#scatreach{cursor:crosshair}
 .selrow .chip{border-style:dashed}
 .selrow .x{margin-left:4px; font-weight:700; opacity:.7}
 .selrow .cnt{color:var(--ink2)}
@@ -182,7 +182,8 @@ const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], puls
   selPos:null,   // {lat, lon} with RAD_KM radius
   selDoy:null,   // {d} with +/- DOY_W days (circular)
   selHour:null,  // {h} with +/- HOUR_W hours (circular)
-  selYear:null}; // {y}
+  selYear:null,  // {y}
+  selPI:null};   // {which:"max"|"reach", v, d, dv, dd} window in dVMAX space
 const RAD_KM = 1500, DOY_W = 15, HOUR_W = 3;
 state.cond = 0;
 // 0 all | 1 0!=top!=max | 2 0=top!=max | 3 reach!=max | 4 |dVMAX|>1 | 5 legacy
@@ -219,6 +220,12 @@ function hourIn(h){
   return Math.min(dh, 24-dh) <= HOUR_W;
 }
 function yearIn(y){ return !state.selYear || y === state.selYear.y; }
+function piIn(vt, vm, vr){
+  if (!state.selPI) return true;
+  const S = state.selPI, vy = S.which === "max" ? vm : vr;
+  if (vt < 0 || vy < 0) return false;
+  return Math.abs(vt - S.v) <= S.dv && Math.abs((vy - vt) - S.d) <= S.dd;
+}
 function condPassMap(i){
   if (state.cond === 0) return true;
   if (state.cond === 4) return DATA.map.gpi[i] === 2;
@@ -250,6 +257,8 @@ function passMap(i, skip=""){
   if (skip !== "doy"  && !doyIn(DATA.map.doy[i])) return false;
   if (skip !== "hour" && !hourIn(DATA.map.hour[i])) return false;
   if (skip !== "year" && !yearIn(DATA.map.year[i])) return false;
+  if (skip !== "pi" && !piIn(DATA.map.Vtop[i], DATA.map.Vmax[i], DATA.map.Vreach[i]))
+    return false;
   return condPassMap(i);
 }
 
@@ -262,6 +271,7 @@ function pool(){
     if (state.cls >= 0 && cs[i] !== state.cls) continue;
     if (!posIn(P.lat[i], P.lon[i]) || !doyIn(P.doy[i]) ||
         !hourIn(P.hour[i]) || !yearIn(P.year[i])) continue;
+    if (!piIn(P.Vtop[i], P.Vmax[i], P.Vreach[i])) continue;
     if (!condPassPlayer(i)) continue;
     out.push(i);
   }
@@ -348,7 +358,7 @@ const MEXT = {lo:-180, hi:180, la:-80, lb:90};
 let densCache = null, densKey = "";
 function buildDensity(){
   const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+cvar("--bg")+"|"+
-    JSON.stringify([state.selDoy, state.selHour, state.selYear]);
+    JSON.stringify([state.selDoy, state.selHour, state.selYear, state.selPI]);
   if (key === densKey && densCache) return densCache;
   const bin = 2, nx = Math.ceil(360/bin), ny = Math.ceil((MEXT.lb-MEXT.la)/bin);
   const cnt = new Float32Array(nx*ny);
@@ -567,7 +577,7 @@ function drawOneScatter(id, Vy, colv){
     let dmax = 0;
     const pts = [];
     for (let i=0;i<Vt.length;i++){
-      if (!passMap(i)) continue;
+      if (!passMap(i, "pi")) continue;
       if (Vt[i] < 0 || Vy[i] < 0) continue;
       const d = Vy[i] - Vt[i];
       pts.push([Vt[i], d]);
@@ -610,6 +620,16 @@ function drawOneScatter(id, Vy, colv){
   }
   g.clearRect(0,0,W,H);
   g.drawImage(cache.cv,0,0);
+  const which = id === "scatmax" ? "max" : "reach";
+  if (state.selPI && state.selPI.which === which){
+    const S = state.selPI, YL = cache.YL;
+    const X = v => padL + v/AXMAX*(W-padL-padR);
+    const Y = d => padT + (YL - d)/(2*YL)*(H-padT-padB);
+    g.strokeStyle = cvar("--ink"); g.lineWidth = 2.5; g.setLineDash([7,5]);
+    g.strokeRect(X(S.v-S.dv), Y(S.d+S.dd), X(S.v+S.dv)-X(S.v-S.dv),
+                 Y(S.d-S.dd)-Y(S.d+S.dd));
+    g.setLineDash([]);
+  }
   if (state.cur>=0){
     const P = DATA.player, i = state.cur;
     const vy = id === "scatmax" ? P.Vmax[i] : P.Vreach[i];
@@ -658,8 +678,8 @@ function updateReadout(){
 
 // ---------- chips ----------
 function anyFilter(){
-  return !!(state.selPos || state.selDoy || state.selHour || state.selYear)
-         || state.cond !== 0;
+  return !!(state.selPos || state.selDoy || state.selHour || state.selYear ||
+            state.selPI) || state.cond !== 0;
 }
 function chipShares(){
   // live topology distribution under all OTHER filters (crossfilter: the
@@ -772,6 +792,12 @@ function buildSelRow(){
        ()=> state.selHour = null);
   if (state.selYear)
     mk(`year ${state.selYear.y}`, ()=> state.selYear = null);
+  if (state.selPI){
+    const S = state.selPI;
+    mk(`\u0394VMAX(${S.which}) @ top ${S.v.toFixed(0)}\u00b1${S.dv} \u00b7 `+
+       `\u0394 ${S.d>=0?"+":""}${S.d.toFixed(1)}\u00b1${S.dd}`,
+       ()=> state.selPI = null);
+  }
   // matching counts are always shown: they reflect ALL active filters
   // (parcel, topology, condition, and any marginal selections)
   const n = pool().length;
@@ -821,6 +847,23 @@ document.getElementById("ring").addEventListener("click", e=>{
   state.selDoy = {d: Math.min(366, Math.max(1, Math.round(a/(2*Math.PI)*366)+1))};
   selChanged();
 });
+for (const id of ["scatmax","scatreach"]){
+  document.getElementById(id).addEventListener("click", e=>{
+    const [cv] = ctx2(id);
+    const [x,y] = evXY(cv, e);
+    const W=cv.width, H=cv.height, padL=64, padR=14, padT=14, padB=58;
+    const YL = scatCaches[id].YL || 1;
+    if (x < padL || x > W-padR || y < padT || y > H-padB){
+      state.selPI = null; selChanged(); return;
+    }
+    const v = (x-padL)/(W-padL-padR)*AXMAX;
+    const d = YL - (y-padT)/(H-padT-padB)*2*YL;
+    state.selPI = {which: id === "scatmax" ? "max" : "reach",
+                   v: +v.toFixed(1), d: +d.toFixed(2), dv: 5,
+                   dd: +Math.max(0.5, 0.1*YL).toFixed(2)};
+    selChanged();
+  });
+}
 document.getElementById("hours").addEventListener("click", e=>{
   const [cv] = ctx2("hours");
   const [x,y] = evXY(cv, e);
@@ -843,8 +886,10 @@ document.getElementById("years").addEventListener("click", e=>{
 });
 addEventListener("keydown", e=>{
   if (e.key === "Escape" &&
-      (state.selPos || state.selDoy || state.selHour || state.selYear)){
+      (state.selPos || state.selDoy || state.selHour || state.selYear ||
+       state.selPI)){
     state.selPos = state.selDoy = state.selHour = state.selYear = null;
+    state.selPI = null;
     selChanged();
   }
 });
