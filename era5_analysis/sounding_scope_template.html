@@ -1,0 +1,1086 @@
+<title>Sounding Scope — buoyancy topologies</title>
+<style>
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --ink:#10151c; --ink2:#5a6675;
+  --grid:#e3e7ee; --edge:#d4dae3; --zero:#10151c; --densall:#5a7fa8;
+  --c0:#2a78d6; --c1:#1baf7a; --c2:#eda100; --c3:#008300;
+  --c4:#4a3aa7; --c5:#e34948; --c6:#e87ba4; --c7:#8a93a1;
+  --warn:#e34948;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#101318; --panel:#171b22; --ink:#e8ecf2; --ink2:#93a0b4;
+    --grid:#232a35; --edge:#2c3442; --zero:#e8ecf2; --densall:#7d9cc0;
+    --c0:#3987e5; --c1:#25c08a; --c2:#e0a63c; --c3:#3fae3f;
+    --c4:#9085e9; --c5:#e66767; --c6:#d55181; --c7:#7d8697;
+    --warn:#e66767;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101318; --panel:#171b22; --ink:#e8ecf2; --ink2:#93a0b4;
+  --grid:#232a35; --edge:#2c3442; --zero:#e8ecf2; --densall:#7d9cc0;
+  --c0:#3987e5; --c1:#25c08a; --c2:#e0a63c; --c3:#3fae3f;
+  --c4:#9085e9; --c5:#e66767; --c6:#d55181; --c7:#7d8697;
+  --warn:#e66767;
+}
+:root[data-theme="light"]{
+  --bg:#f7f8fa; --panel:#ffffff; --ink:#10151c; --ink2:#5a6675;
+  --grid:#e3e7ee; --edge:#d4dae3; --zero:#10151c; --densall:#5a7fa8;
+  --c0:#2a78d6; --c1:#1baf7a; --c2:#eda100; --c3:#008300;
+  --c4:#4a3aa7; --c5:#e34948; --c6:#e87ba4; --c7:#8a93a1;
+  --warn:#e34948;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:14px; line-height:1.45; padding:20px 22px 40px;
+}
+.mono{font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums}
+header{display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; margin-bottom:6px}
+h1{font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  font-size:17px; font-weight:700; letter-spacing:.24em; margin:0; text-transform:uppercase}
+.sub{color:var(--ink2); font-size:13px}
+.controls{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:10px 0 8px}
+.seg{display:inline-flex; border:1px solid var(--edge); border-radius:6px; overflow:hidden}
+.seg button{
+  background:var(--panel); color:var(--ink2); border:0; padding:6px 12px; cursor:pointer;
+  font-family:inherit; font-size:13px; border-right:1px solid var(--edge)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--bg); font-weight:600}
+.seg button:focus-visible, .chip:focus-visible, #play:focus-visible, #step:focus-visible{
+  outline:2px solid var(--c0); outline-offset:1px}
+#play,#step{
+  background:var(--panel); color:var(--ink); border:1px solid var(--edge);
+  border-radius:6px; padding:6px 14px; cursor:pointer; font-size:13px; font-family:inherit}
+label.spd{color:var(--ink2); font-size:12px; display:inline-flex; align-items:center; gap:7px}
+input[type=range]{accent-color:var(--c0); width:120px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 14px}
+.chip{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  border:1px solid var(--edge); background:var(--panel); color:var(--ink2);
+  border-radius:20px; padding:3px 11px; font-size:12px; font-family:inherit}
+.chip .sw{width:9px; height:9px; border-radius:2px; display:inline-block}
+.chip[aria-pressed="true"]{border-color:var(--ink); color:var(--ink); font-weight:600}
+.chip .pct{opacity:.65; margin-left:2px}
+.grid{display:grid; grid-template-columns:minmax(420px,560px) minmax(380px,520px);
+  gap:18px; align-items:start}
+@media (max-width:960px){ .grid{grid-template-columns:1fr} }
+.panelbox{background:var(--panel); border:1px solid var(--edge); border-radius:8px; padding:12px}
+.panelbox h2{
+  margin:0 0 8px; font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--ink2); font-weight:600;
+  font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace}
+canvas{display:block; width:100%; height:auto}
+#map,#ring,#hours,#years{cursor:crosshair}
+#scatmax,#scatreach{cursor:crosshair}
+.selrow .chip{border-style:dashed}
+.selrow .x{margin-left:4px; font-weight:700; opacity:.7}
+.selrow .cnt{color:var(--ink2)}
+.rail{display:flex; flex-direction:column; gap:14px}
+.timerow{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.readout{display:grid; grid-template-columns:repeat(2,1fr); gap:4px 18px; font-size:12.5px}
+.readout div{display:flex; justify-content:space-between; gap:8px; border-bottom:1px dashed var(--grid); padding:2px 0}
+.readout .k{color:var(--ink2)}
+.readout .flip{color:var(--warn); font-weight:700}
+footer{color:var(--ink2); font-size:12.5px; max-width:72ch; margin-top:18px}
+footer b{color:var(--ink)}
+</style>
+
+<header>
+  <h1>Sounding Scope</h1>
+  <span class="sub">buoyancy-profile flipbook over <span class="mono" id="ntc"></span> global ERA5 ocean columns · parcels B/C on the <span class="mono" id="nbc"></span> with a converged storm pressure (SST &gt; 5 °C) · conditioned on sign topology</span>
+</header>
+
+<div class="controls">
+  <span class="seg" role="group" aria-label="parcel">
+    <button data-parcel="A" aria-pressed="false">A · environmental</button>
+    <button data-parcel="B" aria-pressed="true">B · eyewall</button>
+    <button data-parcel="C" aria-pressed="false">C · saturated core</button>
+  </span>
+  <button id="play" aria-pressed="true">Pause</button>
+  <button id="step">Step</button>
+  <label class="spd">rate <input type="range" id="speed" min="1" max="16" value="5" step="1">
+    <span class="mono" id="spdv">5/s</span></label>
+</div>
+<div class="chips" id="chips" role="group" aria-label="topology filter"></div>
+<div class="chips" id="conds" role="group" aria-label="disagreement condition"></div>
+<div class="chips selrow" id="selrow" role="group" aria-label="marginal selections"></div>
+
+<div class="grid">
+  <div class="panelbox">
+    <h2 id="scopetitle">buoyancy vs log-pressure</h2>
+    <canvas id="scope" width="1080" height="1240"></canvas>
+  </div>
+  <div class="rail">
+    <div class="panelbox">
+      <h2>position · density of filtered population</h2>
+      <canvas id="map" width="1020" height="470"></canvas>
+    </div>
+    <div class="timerow">
+      <div class="panelbox">
+        <h2>day of year</h2>
+        <canvas id="ring" width="360" height="360"></canvas>
+      </div>
+      <div class="panelbox">
+        <h2>hour of day (UTC)</h2>
+        <canvas id="hours" width="360" height="360"></canvas>
+      </div>
+    </div>
+    <div class="panelbox">
+      <h2>year</h2>
+      <canvas id="years" width="1020" height="300"></canvas>
+      <div class="readout mono" id="readout"></div>
+    </div>
+    <div class="timerow">
+      <div class="panelbox">
+        <h2>&Delta;VMAX: max &minus; top</h2>
+        <canvas id="scatmax" width="500" height="430"></canvas>
+      </div>
+      <div class="panelbox">
+        <h2>&Delta;VMAX: reach &minus; top</h2>
+        <canvas id="scatreach" width="500" height="430"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Each flash is one real reanalysis column: its lifted-parcel buoyancy curve (left),
+  its location, and its date. The shaded layers show where and when the <b>currently
+  filtered topology</b> lives: a 2°-binned density on the map, a 10-day rose on the
+  ring, and yearly counts on the track. Curve and markers take the color of the
+  profile's topology class. <b>LNB conventions</b>, named consistently throughout as
+  <b>top</b> (the legacy pcmin rule: integrate the signed work to the topmost
+  positive level, clamp at zero), <b>max</b> (maximum buoyancy work), and
+  <b>reach</b> (ballistic coasting from the LFC): the readout turns red when top
+  returns zero for a convectively viable profile. Parcels: A = ambient air lifted
+  as-is; B = boundary-layer air moisture-enriched by the storm's converged central
+  pressure; C = air saturated at the sea-surface temperature. VMAX&sup2; &prop;
+  (SST/T<sub>O</sub>)(E<sub>C</sub> &minus; E<sub>B</sub>), so with B or C
+  selected the other of the pair is drawn thin and dashed: the PI winds live in
+  the gap between those two curves. Densities, class percentages, matching counts,
+  and the &Delta;VMAX scatters are computed over the <b>full population</b>
+  (every column); only the animated flip-book draws from a ~20k stratified
+  sample. Space bar toggles play. <b>Click any marginal to filter the samples</b>:
+  the map selects a position (±1,500 km), the rings a day-of-year window
+  (±15 days) or an hour-of-day window (±3 h UTC), the track a single year; each marginal keeps showing the
+  density under the <i>other</i> filters, with its own selection dashed.
+  Click the × chips or press Escape to clear; on the &Delta;VMAX panels,
+  clicking inside the current selection rectangle also clears it. The condition chips restrict
+  everything to profiles where the LNB conventions disagree: The OTL arrow on the
+  scope's pressure axis marks the storm outflow level — parcel C's LNB under
+  max, the one that sets T<sub>O</sub> in the PI formulas — for every profile,
+  whichever parcel is selected. T/M/R lanes
+  mark the selected parcel's LNB under top, max, and reach (the first-crossing
+  convention is omitted — it is materially wrong too often to be
+  interesting); CAPE and potential intensity per
+  convention appear in the readout (PI computed at tcpyPI's own ptop = 50).
+  The eight real columns where the top convention fails to converge are
+  included — select "top non-convergent" to see them.
+</footer>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("data").textContent);
+DATA.map = null;   // filled asynchronously from the packed full-population table
+async function inflate(b64){
+  const raw = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+  const st = new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(st).arrayBuffer();
+}
+async function decodeTables(){
+  // statistics table: one column per field, int16 columns first (alignment)
+  const mb = DATA.mapbin, buf = await inflate(mb.b64), out = {};
+  let off = 0;
+  for (const [name, dt, scale] of mb.cols){
+    let a;
+    if (dt === "i2"){ a = new Int16Array(buf, off, mb.n); off += 2*mb.n; }
+    else if (dt === "i1"){ a = new Int8Array(buf, off, mb.n); off += mb.n; }
+    else { a = new Uint8Array(buf, off, mb.n); off += mb.n; }
+    if (scale !== 1){
+      const f = new Float32Array(mb.n);
+      for (let i=0;i<mb.n;i++) f[i] = a[i]/scale;
+      a = f;
+    }
+    out[name] = a;
+  }
+  DATA.map = out; delete DATA.mapbin;
+  // player curves: (3, n, nlvl) int16 rectangles; [] where B/C undefined
+  const cb = DATA.curvebin, cbuf = await inflate(cb.b64);
+  const ci = new Int16Array(cbuf, 0, 3*cb.n*cb.nlvl);
+  [["A",0],["B",1],["C",2]].forEach(([pn, j]) => {
+    const cs = DATA.player["c"+pn], arr = [];
+    for (let i=0;i<cb.n;i++){
+      if (pn !== "A" && cs[i] < 0){ arr.push([]); continue; }
+      const f = new Float32Array(cb.nlvl), base = (j*cb.n + i)*cb.nlvl;
+      for (let k=0;k<cb.nlvl;k++) f[k] = ci[base+k]/cb.scale;
+      arr.push(f);
+    }
+    DATA.player["curve"+pn] = arr;
+  });
+  delete DATA.curvebin;
+}
+const PLV = DATA.P, NL = PLV.length;
+const MONL = ["J","F","M","A","M","J","J","A","S","O","N","D"];
+const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], pulses:[],
+  selPos:null,   // {lat, lon} with RAD_KM radius
+  selDoy:null,   // {d} with +/- DOY_W days (circular)
+  selHour:null,  // {h} with +/- HOUR_W hours (circular)
+  selYear:null,  // {y}
+  selPI:null};   // {which:"max"|"reach", v, d, dv, dd} window in dVMAX space
+const RAD_KM = 1500, DOY_W = 15, HOUR_W = 3;
+state.cond = 0;
+// 0 all | 1 0!=top!=max | 2 0=top!=max | 3 reach!=max | 4 |dVMAX|>1 | 5 legacy
+// ("!=" at > 1 J/kg throughout)
+const CONDS = [["all profiles",0], ["0 \u2260 top \u2260 max",1],
+               ["0 = top \u2260 max",2], ["reach \u2260 max",3],
+               ["\u0394VMAX > +8 m/s",4], ["\u0394VMAX < \u22122 m/s",6],
+               ["top non-convergent",5]];
+const CONVC = {top:"--c5", max:"--c1", first:"--c2", reach:"--c4"};  // red aqua yellow violet
+
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (reduced) state.playing = false;
+
+function cvar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function classColor(c){ return cvar("--c"+c); }
+
+// ---------- selection predicates ----------
+function havKm(la1, lo1, la2, lo2){
+  const r = Math.PI/180, R = 6371;
+  const a = Math.sin((la2-la1)*r/2)**2 +
+            Math.cos(la1*r)*Math.cos(la2*r)*Math.sin((lo2-lo1)*r/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function doyIn(d){
+  if (!state.selDoy) return true;
+  const dd = Math.abs(d - state.selDoy.d);
+  return Math.min(dd, 366-dd) <= DOY_W;
+}
+function posIn(la, lo){
+  return !state.selPos || havKm(la, lo, state.selPos.lat, state.selPos.lon) <= RAD_KM;
+}
+function hourIn(h){
+  if (!state.selHour) return true;
+  const dh = Math.abs(h - state.selHour.h);
+  return Math.min(dh, 24-dh) <= HOUR_W;
+}
+function yearIn(y){ return !state.selYear || y === state.selYear.y; }
+function piIn(vt, vm, vr){
+  if (!state.selPI) return true;
+  const S = state.selPI, vy = S.which === "max" ? vm : vr;
+  if (vt < 0 || vy < 0) return false;
+  return Math.abs(vt - S.v) <= S.dv && Math.abs((vy - vt) - S.d) <= S.dd;
+}
+function condPassMap(i){
+  if (state.cond === 0) return true;
+  if (state.cond === 4) return DATA.map.gpi[i] === 2;
+  if (state.cond === 6) return DATA.map.gpi[i] === 3;
+  if (state.cond === 5) return DATA.map.gpi[i] === 1;
+  const g = DATA.map["g"+state.parcel][i];
+  // bit0: E_top = 0 while E_max > 0; bit1: |E_top-E_max| > 1 J/kg
+  if (state.cond === 1) return (g & 2) !== 0 && (g & 1) === 0;  // 0 != top != max
+  if (state.cond === 2) return (g & 2) !== 0 && (g & 1) !== 0;  // 0 = top != max
+  return (g & 4) !== 0;                                          // reach != max
+}
+function condPassPlayer(i){
+  if (state.cond === 0) return true;
+  const P = DATA.player, s = state.parcel;
+  const et = P["Etop"+s][i], em = P["Emax"+s][i];
+  if (state.cond === 1) return et > 0 && Math.abs(et - em) > 1;
+  if (state.cond === 2) return et === 0 && Math.abs(et - em) > 1;
+  if (state.cond === 3) return Math.abs(P["Ereach"+s][i] - em) > 1;
+  // signed gap: dv = VMAX(max) - VMAX(top)
+  if (state.cond === 4) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
+                               P.Vmax[i] - P.Vtop[i] > 8;
+  if (state.cond === 6) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
+                               P.Vmax[i] - P.Vtop[i] < -2;
+  return P.legfail[i] === 1;
+}
+// skip: which dimension NOT to apply (crossfilter: a marginal shows the
+// density under all the OTHER filters, with its own selection as an overlay)
+function passMap(i, skip=""){
+  const v = DATA.map["c"+state.parcel][i];
+  if (v < 0) return false;
+  if (skip !== "cls" && state.cls >= 0 && v !== state.cls) return false;
+  if (skip !== "pos"  && !posIn(DATA.map.lat[i], DATA.map.lon[i])) return false;
+  if (skip !== "doy"  && !doyIn(DATA.map.doy[i])) return false;
+  if (skip !== "hour" && !hourIn(DATA.map.hour[i])) return false;
+  if (skip !== "year" && !yearIn(DATA.map.year[i])) return false;
+  if (skip !== "pi" && !piIn(DATA.map.Vtop[i], DATA.map.Vmax[i], DATA.map.Vreach[i]))
+    return false;
+  return skip === "cond" || condPassMap(i);
+}
+
+// ---------- pools ----------
+function passPlayer(i){
+  if (i == null || i < 0) return false;
+  const cs = DATA.player["c"+state.parcel], P = DATA.player;
+  if (cs[i] < 0) return false;               // parcel undefined for this row
+  if (state.cls >= 0 && cs[i] !== state.cls) return false;
+  if (!posIn(P.lat[i], P.lon[i]) || !doyIn(P.doy[i]) ||
+      !hourIn(P.hour[i]) || !yearIn(P.year[i])) return false;
+  if (!piIn(P.Vtop[i], P.Vmax[i], P.Vreach[i])) return false;
+  return condPassPlayer(i);
+}
+function pool(){
+  const out=[];
+  for (let i=0;i<DATA.player.lat.length;i++) if (passPlayer(i)) out.push(i);
+  return out;
+}
+
+// ---------- canvas helpers ----------
+function ctx2(id){
+  const cv = document.getElementById(id);
+  return [cv, cv.getContext("2d")];
+}
+const yLnTop = Math.log(28), yLnBot = Math.log(1010);
+function yOf(p, h, pad){ return pad + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(h-2*pad); }
+
+// ---------- scope ----------
+function drawScope(){
+  const [cv,g] = ctx2("scope");
+  const W=cv.width, H=cv.height, padL=86, padR=130, padT=40, padB=52;
+  g.clearRect(0,0,W,H);
+  const [xlo,xhi] = DATA.xlims[state.parcel];
+  const xOf = v => padL + (v-xlo)/(xhi-xlo)*(W-padL-padR);
+  const yy = p => yOf(p, H-padB+ (padT), padT) * ( (H-padT-padB)/(H-2*padT) ) ; // unused
+  const Y = p => padT + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(H-padT-padB);
+  g.font = "22px ui-monospace, Menlo, monospace";
+  g.strokeStyle = cvar("--grid"); g.fillStyle = cvar("--ink2"); g.lineWidth = 1.6;
+  for (const p of [1000,850,700,500,400,300,200,150,100,70,50,30]){
+    const y = Y(p);
+    g.beginPath(); g.moveTo(padL,y); g.lineTo(W-padR,y); g.stroke();
+    g.textAlign="right"; g.textBaseline="middle"; g.fillText(String(p), padL-10, y);
+  }
+  for (let v=Math.ceil(xlo/5)*5; v<=xhi; v+=5){
+    const x = xOf(v); g.beginPath(); g.moveTo(x,padT); g.lineTo(x,H-padB); g.stroke();
+    g.textAlign="center"; g.textBaseline="top"; g.fillText(String(v), x, H-padB+10);
+  }
+  g.fillText("buoyancy [K]", (padL+W-padR)/2, H-padB+34);
+  g.save(); g.translate(24,(padT+H-padB)/2); g.rotate(-Math.PI/2);
+  g.textAlign="center"; g.textBaseline="middle"; g.fillText("pressure [hPa]",0,0); g.restore();
+  // zero line
+  g.strokeStyle = cvar("--zero"); g.lineWidth = 2.2; g.globalAlpha = .75;
+  g.beginPath(); g.moveTo(xOf(0),padT); g.lineTo(xOf(0),H-padB); g.stroke();
+  g.globalAlpha = 1;
+  // ghost trail then current
+  const curves = DATA.player["curve"+state.parcel];
+  const cls = DATA.player["c"+state.parcel];
+  const drawCurve = (idx, alpha, lw) => {
+    // clip the viewport, never the data: off-scale segments exit the frame
+    g.save();
+    g.beginPath(); g.rect(padL, padT, W-padL-padR, H-padT-padB); g.clip();
+    g.strokeStyle = classColor(cls[idx]); g.globalAlpha = alpha; g.lineWidth = lw;
+    g.beginPath();
+    const c = curves[idx];
+    for (let j=0;j<NL;j++){
+      const x = xOf(c[j]), y = Y(PLV[j]);
+      if (j===0) g.moveTo(x,y); else g.lineTo(x,y);
+    }
+    g.stroke(); g.restore();
+  };
+  state.trail.forEach((idx,k)=> drawCurve(idx, 0.05 + 0.10*k/Math.max(1,state.trail.length), 2));
+  // companion curve: VMAX^2 ~ (SST/T_O)(E_C - E_B), so when B or C is
+  // selected, draw the other of the pair thin for the same profile --
+  // the PI winds live in the gap between these two curves
+  if (state.cur>=0 && (state.parcel === "B" || state.parcel === "C")){
+    const comp = state.parcel === "B" ? "C" : "B";
+    const ccurve = DATA.player["curve"+comp][state.cur];
+    const ccls = DATA.player["c"+comp][state.cur];
+    if (ccurve.length && ccls >= 0){
+      g.save();
+      g.beginPath(); g.rect(padL, padT, W-padL-padR, H-padT-padB); g.clip();
+      g.strokeStyle = classColor(ccls); g.globalAlpha = 0.5; g.lineWidth = 2;
+      g.setLineDash([8,5]);
+      g.beginPath();
+      for (let j=0;j<NL;j++){
+        const x = xOf(ccurve[j]), y = Y(PLV[j]);
+        if (j===0) g.moveTo(x,y); else g.lineTo(x,y);
+      }
+      g.stroke(); g.setLineDash([]); g.restore(); g.globalAlpha = 1;
+    }
+  }
+  if (state.cur>=0) drawCurve(state.cur, 1, 4.5);
+  // outflow marker: the storm's outflow level is parcel C's max-work LNB
+  // (this is the LNB that sets T_O in the PI formulas) -- always shown,
+  // whichever parcel is selected
+  if (state.cur>=0){
+    const potl = DATA.player.LmaxC[state.cur];
+    if (potl > 0){
+      const y = Y(potl);
+      g.fillStyle = cvar("--ink2");
+      g.beginPath();
+      g.moveTo(padL, y); g.lineTo(padL-12, y-7); g.lineTo(padL-12, y+7);
+      g.closePath(); g.fill();
+      g.font = "17px ui-monospace, Menlo, monospace";
+      g.textAlign = "right"; g.textBaseline = "bottom";
+      g.fillText("OTL", padL-14, y-8);
+    }
+  }
+  // LNB gutter: one lane per convention; a dot at each convention's LNB
+  if (state.cur>=0){
+    const s = state.parcel, i = state.cur, Pl = DATA.player;
+    const lanes = [["T","Ltop"], ["M","Lmax"], ["R","Lreach"]];
+    const gx0 = W - padR + 24, lane = 34;
+    g.font = "20px ui-monospace, Menlo, monospace"; g.textAlign = "center";
+    lanes.forEach(([lab, key], k)=>{
+      const x = gx0 + k*lane;
+      const col = cvar(CONVC[key.slice(1).replace("L","")] || "--ink2");
+      g.fillStyle = cvar(CONVC[["top","max","reach"][k]]);
+      g.textBaseline = "bottom";
+      g.fillText(lab, x, padT - 8);
+      g.strokeStyle = cvar("--grid"); g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(x, padT); g.lineTo(x, H-padB); g.stroke();
+      const p = Pl[key + s][i];
+      if (p > 0){
+        g.beginPath(); g.arc(x, Y(p), 7, 0, 7); g.fill();
+      }
+    });
+  }
+}
+
+// ---------- map ----------
+const MEXT = {lo:-180, hi:180, la:-80, lb:90};
+let densCache = null, densKey = "";
+const histCaches = {};
+function histo(kind, nb, binOf){
+  const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+JSON.stringify(
+    [state.selPos, kind==="doy" ? null : state.selDoy,
+     kind==="hour" ? null : state.selHour,
+     kind==="year" ? null : state.selYear, state.selPI]);
+  const hc = histCaches[kind];
+  if (hc && hc.key === key) return hc.cnt;
+  const cnt = new Float32Array(nb), n = DATA.map.lat.length;
+  for (let i=0;i<n;i++) if (passMap(i, kind)) cnt[binOf(i)]++;
+  histCaches[kind] = {key, cnt};
+  return cnt;
+}
+function buildDensity(){
+  const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+cvar("--bg")+"|"+
+    JSON.stringify([state.selDoy, state.selHour, state.selYear, state.selPI]);
+  if (key === densKey && densCache) return densCache;
+  const bin = 2, nx = Math.ceil(360/bin), ny = Math.ceil((MEXT.lb-MEXT.la)/bin);
+  const cnt = new Float32Array(nx*ny);
+  const {lat,lon} = DATA.map;
+  for (let i=0;i<lat.length;i++){
+    if (!passMap(i, "pos")) continue;
+    const ix = Math.floor((lon[i]-MEXT.lo)/bin);
+    const iy = Math.floor((lat[i]-MEXT.la)/bin);
+    if (ix<0 || ix>=nx || iy<0 || iy>=ny) continue;   // drop, never clamp
+    cnt[iy*nx+ix]++;
+  }
+  let mx=0; for (let k=0;k<cnt.length;k++) if (cnt[k]>mx) mx=cnt[k];
+  const off = document.createElement("canvas");
+  const [cv] = ctx2("map"); off.width=cv.width; off.height=cv.height;
+  const og = off.getContext("2d");
+  const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
+  const X = lo => (lo-MEXT.lo)/360*off.width;
+  const Yl = la => (MEXT.lb-la)/(MEXT.lb-MEXT.la)*off.height;
+  og.fillStyle = col;
+  for (let iy=0;iy<ny;iy++) for (let ix=0;ix<nx;ix++){
+    const c = cnt[iy*nx+ix]; if (!c) continue;
+    og.globalAlpha = 0.08 + 0.8*Math.sqrt(c/mx);
+    og.fillRect(X(MEXT.lo+ix*bin), Yl(MEXT.la+(iy+1)*bin),
+                off.width/nx+0.5, off.height/ny+0.5);
+  }
+  densCache = off; densKey = key;
+  return off;
+}
+function drawMap(now){
+  const [cv,g] = ctx2("map");
+  g.clearRect(0,0,cv.width,cv.height);
+  g.strokeStyle = cvar("--grid"); g.lineWidth=1.5;
+  for (let la=-60; la<=60; la+=30){
+    const y=(MEXT.lb-la)/(MEXT.lb-MEXT.la)*cv.height;
+    g.beginPath(); g.moveTo(0,y); g.lineTo(cv.width,y); g.stroke();
+  }
+  for (let lo=-120; lo<=120; lo+=60){
+    const x=(lo-MEXT.lo)/360*cv.width;
+    g.beginPath(); g.moveTo(x,0); g.lineTo(x,cv.height); g.stroke();
+  }
+  g.drawImage(buildDensity(),0,0);
+  g.strokeStyle = cvar("--edge"); g.strokeRect(0.5,0.5,cv.width-1,cv.height-1);
+  if (state.selPos){
+    const Xs = (state.selPos.lon-MEXT.lo)/360*cv.width;
+    const Ys = (MEXT.lb-state.selPos.lat)/(MEXT.lb-MEXT.la)*cv.height;
+    const degR = RAD_KM/111.2;
+    const ry = degR/(MEXT.lb-MEXT.la)*cv.height;
+    const rx = degR/Math.max(0.2, Math.cos(state.selPos.lat*Math.PI/180))/360*cv.width;
+    g.strokeStyle = cvar("--ink"); g.lineWidth = 2.5; g.setLineDash([7,5]);
+    g.beginPath(); g.ellipse(Xs, Ys, rx, ry, 0, 0, 7); g.stroke();
+    g.setLineDash([]);
+  }
+  // pulses
+  const X = lo => (lo-MEXT.lo)/360*cv.width;
+  const Yl = la => (MEXT.lb-la)/(MEXT.lb-MEXT.la)*cv.height;
+  state.pulses = state.pulses.filter(p => now-p.t0 < 1100);
+  for (const p of state.pulses){
+    const a = 1-(now-p.t0)/1100, r = 5 + 26*(1-a);
+    g.strokeStyle = p.col; g.globalAlpha = a*0.9; g.lineWidth = 3.5;
+    g.beginPath(); g.arc(X(p.lon), Yl(p.lat), r, 0, 7); g.stroke();
+    g.fillStyle = p.col; g.globalAlpha = Math.min(1, a*1.4);
+    g.beginPath(); g.arc(X(p.lon), Yl(p.lat), 5.5, 0, 7); g.fill();
+    g.globalAlpha = 1;
+  }
+}
+
+// ---------- day-of-year ring ----------
+function drawRing(now){
+  const [cv,g] = ctx2("ring");
+  const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
+  g.clearRect(0,0,W,W);
+  const nb=36;
+  const cnt = histo("doy", nb,
+    i => Math.min(nb-1, Math.floor((DATA.map.doy[i]-1)/366*nb)));
+  let mx=1; for (const c of cnt) if (c>mx) mx=c;
+  const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
+  for (let k=0;k<nb;k++){
+    const a0=-Math.PI/2 + k/nb*2*Math.PI, a1=a0+2*Math.PI/nb*0.92;
+    const rr = r0 + (r1-r0)*Math.sqrt(cnt[k]/mx);
+    g.fillStyle = col; g.globalAlpha=0.85;
+    g.beginPath(); g.arc(C,C,rr,a0,a1); g.arc(C,C,r0,a1,a0,true); g.closePath(); g.fill();
+    g.globalAlpha=1;
+  }
+  g.strokeStyle=cvar("--grid"); g.lineWidth=1.5;
+  g.beginPath(); g.arc(C,C,r0,0,7); g.stroke();
+  g.beginPath(); g.arc(C,C,r1,0,7); g.stroke();
+  if (state.selDoy){
+    const a0=-Math.PI/2 + ((state.selDoy.d-DOY_W-1)/366)*2*Math.PI;
+    const a1=-Math.PI/2 + ((state.selDoy.d+DOY_W)/366)*2*Math.PI;
+    g.strokeStyle=cvar("--ink"); g.lineWidth=5; g.globalAlpha=.8;
+    g.beginPath(); g.arc(C,C,r1+8,a0,a1); g.stroke(); g.globalAlpha=1;
+  }
+  g.fillStyle=cvar("--ink2"); g.font="19px ui-monospace, Menlo, monospace";
+  g.textAlign="center"; g.textBaseline="middle";
+  for (let m=0;m<12;m++){
+    const a=-Math.PI/2 + (m+0.5)/12*2*Math.PI;
+    g.fillText(MONL[m], C+Math.cos(a)*(r1+20), C+Math.sin(a)*(r1+20));
+  }
+  if (state.cur>=0){
+    const a=-Math.PI/2 + (DATA.player.doy[state.cur]-1)/366*2*Math.PI;
+    const flash = state.pulses.length? Math.max(0.4, 1-(now-state.pulses[state.pulses.length-1].t0)/1100):0.8;
+    g.fillStyle = classColor(DATA.player["c"+state.parcel][state.cur]);
+    g.globalAlpha = flash;
+    g.beginPath(); g.arc(C+Math.cos(a)*(r1+2), C+Math.sin(a)*(r1+2), 8, 0, 7); g.fill();
+    g.globalAlpha = 1;
+  }
+}
+
+// ---------- hour-of-day ring ----------
+function drawHours(now){
+  const [cv,g] = ctx2("hours");
+  const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
+  g.clearRect(0,0,W,W);
+  const nb=24;
+  const cnt = histo("hour", nb, i => DATA.map.hour[i]);
+  let mx=1; for (const c of cnt) if (c>mx) mx=c;
+  const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
+  for (let k=0;k<nb;k++){
+    const a0=-Math.PI/2 + k/nb*2*Math.PI, a1=a0+2*Math.PI/nb*0.9;
+    const rr = r0 + (r1-r0)*Math.sqrt(cnt[k]/mx);
+    g.fillStyle = col; g.globalAlpha=0.85;
+    g.beginPath(); g.arc(C,C,rr,a0,a1); g.arc(C,C,r0,a1,a0,true); g.closePath(); g.fill();
+    g.globalAlpha=1;
+  }
+  g.strokeStyle=cvar("--grid"); g.lineWidth=1.5;
+  g.beginPath(); g.arc(C,C,r0,0,7); g.stroke();
+  g.beginPath(); g.arc(C,C,r1,0,7); g.stroke();
+  if (state.selHour){
+    const a0=-Math.PI/2 + ((state.selHour.h-HOUR_W)/24)*2*Math.PI;
+    const a1=-Math.PI/2 + ((state.selHour.h+HOUR_W+1)/24)*2*Math.PI;
+    g.strokeStyle=cvar("--ink"); g.lineWidth=5; g.globalAlpha=.8;
+    g.beginPath(); g.arc(C,C,r1+8,a0,a1); g.stroke(); g.globalAlpha=1;
+  }
+  g.fillStyle=cvar("--ink2"); g.font="19px ui-monospace, Menlo, monospace";
+  g.textAlign="center"; g.textBaseline="middle";
+  for (let h=0; h<24; h+=6){
+    const a=-Math.PI/2 + h/24*2*Math.PI;
+    g.fillText(String(h).padStart(2,"0"), C+Math.cos(a)*(r1+22), C+Math.sin(a)*(r1+22));
+  }
+  if (state.cur>=0){
+    const a=-Math.PI/2 + DATA.player.hour[state.cur]/24*2*Math.PI;
+    const flash = state.pulses.length? Math.max(0.4, 1-(now-state.pulses[state.pulses.length-1].t0)/1100):0.8;
+    g.fillStyle = classColor(DATA.player["c"+state.parcel][state.cur]);
+    g.globalAlpha = flash;
+    g.beginPath(); g.arc(C+Math.cos(a)*(r1+2), C+Math.sin(a)*(r1+2), 8, 0, 7); g.fill();
+    g.globalAlpha = 1;
+  }
+}
+
+// ---------- year track ----------
+function drawYears(now){
+  const [cv,g] = ctx2("years");
+  const W=cv.width, H=cv.height, padL=16, padR=16, padB=54, padT=26;
+  g.clearRect(0,0,W,H);
+  const [y0,y1] = DATA.years, ny=y1-y0+1;
+  const cnt = histo("year", ny, i => DATA.map.year[i]-y0);
+  let mx=1; for (const c of cnt) if (c>mx) mx=c;
+  const bw=(W-padL-padR)/ny;
+  const col = state.cls<0 ? cvar("--densall") : classColor(state.cls);
+  g.fillStyle=col;
+  for (let k=0;k<ny;k++){
+    const h=(H-padT-padB)*Math.sqrt(cnt[k]/mx);
+    g.globalAlpha=0.85; g.fillRect(padL+k*bw+0.5, H-padB-h, Math.max(1,bw-1.5), h);
+  }
+  g.globalAlpha=1;
+  if (state.selYear){
+    const x=padL+(state.selYear.y-y0)*bw;
+    g.strokeStyle=cvar("--ink"); g.lineWidth=2.5; g.setLineDash([6,4]);
+    g.strokeRect(x+0.5, padT-4, bw-1, H-padT-padB+4);
+    g.setLineDash([]);
+  }
+  g.strokeStyle=cvar("--grid"); g.lineWidth=1; g.beginPath();
+  g.moveTo(padL,H-padB+0.5); g.lineTo(W-padR,H-padB+0.5); g.stroke();
+  g.fillStyle=cvar("--ink2"); g.font="19px ui-monospace, Menlo, monospace";
+  g.textAlign="center"; g.textBaseline="top";
+  for (let y=Math.ceil(y0/10)*10; y<=y1; y+=10)
+    g.fillText(String(y), padL+(y-y0+0.5)*bw, H-padB+8);
+  if (state.cur>=0){
+    const y=DATA.player.year[state.cur];
+    const x=padL+(y-y0+0.5)*bw;
+    g.fillStyle = classColor(DATA.player["c"+state.parcel][state.cur]);
+    g.beginPath(); g.moveTo(x,padT-8); g.lineTo(x-8,padT-22); g.lineTo(x+8,padT-22);
+    g.closePath(); g.fill();
+    g.fillRect(x-1.5,padT-8,3,H-padT-padB+8-14);
+  }
+}
+
+// ---------- PI delta scatters (x = VMAX_top; y = VMAX_conv - VMAX_top) ----------
+const scatCaches = {scatmax: {key:"", cv:null}, scatreach: {key:"", cv:null}};
+let AXMAX = 0;
+function drawOneScatter(id, Vy, colv){
+  const [cv,g] = ctx2(id);
+  const W=cv.width, H=cv.height, padL=64, padR=14, padT=14, padB=58;
+  if (!AXMAX){
+    let mx = 0;
+    for (const k of ["Vtop","Vmax","Vreach"])
+      for (const v of DATA.map[k]) if (v > mx) mx = v;
+    AXMAX = Math.ceil(mx/10)*10;
+  }
+  const cache = scatCaches[id];
+  const key = state.parcel+"|"+state.cls+"|"+state.cond+"|"+cvar("--bg")+"|"+
+    JSON.stringify([state.selPos, state.selDoy, state.selHour, state.selYear]);
+  if (key !== cache.key || !cache.cv){
+    const Vt = DATA.map.Vtop;
+    // adaptive symmetric y-limit from the FILTERED deltas: the axis rescales
+    // so no point is ever clipped or clamped
+    let dmax = 0;
+    const pts = [];
+    for (let i=0;i<Vt.length;i++){
+      if (!passMap(i, "pi")) continue;
+      if (Vt[i] < 0 || Vy[i] < 0) continue;
+      const d = Vy[i] - Vt[i];
+      pts.push([Vt[i], d]);
+      const ad = Math.abs(d);
+      if (ad > dmax) dmax = ad;
+    }
+    const YL = Math.max(1, dmax*1.1);
+    const off = document.createElement("canvas");
+    off.width = W; off.height = H;
+    const og = off.getContext("2d");
+    const X = v => padL + v/AXMAX*(W-padL-padR);
+    const Y = d => padT + (YL - d)/(2*YL)*(H-padT-padB);
+    og.font = "18px ui-monospace, Menlo, monospace";
+    og.strokeStyle = cvar("--grid"); og.fillStyle = cvar("--ink2"); og.lineWidth = 1.2;
+    for (let v=0; v<=AXMAX; v+=20){
+      og.beginPath(); og.moveTo(X(v),padT); og.lineTo(X(v),H-padB); og.stroke();
+      og.textAlign="center"; og.textBaseline="top"; og.fillText(String(v), X(v), H-padB+8);
+    }
+    // y ticks: 5 nice levels
+    const step = YL > 20 ? Math.ceil(YL/2/10)*10 : (YL > 4 ? Math.ceil(YL/2) : YL/2);
+    for (let d=-2*step; d<=2*step; d+=step){
+      if (Math.abs(d) > YL) continue;
+      og.beginPath(); og.moveTo(padL,Y(d)); og.lineTo(W-padR,Y(d)); og.stroke();
+      og.textAlign="right"; og.textBaseline="middle";
+      og.fillText((d>0?"+":"")+(step<1?d.toFixed(1):String(Math.round(d))), padL-6, Y(d));
+    }
+    og.textAlign="center";
+    og.fillText("VMAX(top) [m/s]", (padL+W-padR)/2, H-padB+30);
+    // zero reference line
+    og.strokeStyle = cvar("--ink2"); og.globalAlpha = 0.5; og.lineWidth = 1.6;
+    og.setLineDash([6,5]);
+    og.beginPath(); og.moveTo(padL,Y(0)); og.lineTo(W-padR,Y(0)); og.stroke();
+    og.setLineDash([]); og.globalAlpha = 1;
+    og.fillStyle = cvar(colv);
+    const dense = pts.length > 20000;
+    og.globalAlpha = dense ? 0.05 : 0.35;
+    for (const [x,d] of pts){
+      if (dense) og.fillRect(X(x)-1.25, Y(d)-1.25, 2.5, 2.5);
+      else { og.beginPath(); og.arc(X(x), Y(d), 3.0, 0, 7); og.fill(); }
+    }
+    if (dense){
+      // same data, second pass: |delta| > 1 m/s drawn opaque so
+      // outliers survive the dense cloud (display emphasis only)
+      og.globalAlpha = 0.45;
+      for (const [x,d] of pts)
+        if (Math.abs(d) > 1) og.fillRect(X(x)-1.25, Y(d)-1.25, 2.5, 2.5);
+    }
+    og.globalAlpha = 1;
+    cache.cv = off; cache.key = key; cache.YL = YL;
+  }
+  g.clearRect(0,0,W,H);
+  g.drawImage(cache.cv,0,0);
+  const which = id === "scatmax" ? "max" : "reach";
+  if (state.selPI && state.selPI.which === which){
+    const S = state.selPI, YL = cache.YL;
+    const X = v => padL + v/AXMAX*(W-padL-padR);
+    const Y = d => padT + (YL - d)/(2*YL)*(H-padT-padB);
+    g.strokeStyle = cvar("--ink"); g.lineWidth = 2.5; g.setLineDash([7,5]);
+    g.strokeRect(X(S.v-S.dv), Y(S.d+S.dd), X(S.v+S.dv)-X(S.v-S.dv),
+                 Y(S.d-S.dd)-Y(S.d+S.dd));
+    g.setLineDash([]);
+  }
+  if (state.cur>=0){
+    const P = DATA.player, i = state.cur;
+    const vy = id === "scatmax" ? P.Vmax[i] : P.Vreach[i];
+    if (P.Vtop[i] >= 0 && vy >= 0){
+      const YL = cache.YL;
+      const X = v => padL + v/AXMAX*(W-padL-padR);
+      const Y = d => padT + (YL - d)/(2*YL)*(H-padT-padB);
+      g.strokeStyle = cvar(colv); g.lineWidth = 3;
+      g.beginPath(); g.arc(X(P.Vtop[i]), Y(vy - P.Vtop[i]), 8, 0, 7); g.stroke();
+    }
+  }
+}
+function drawScatter(){
+  drawOneScatter("scatmax", DATA.map.Vmax, "--c1");
+  drawOneScatter("scatreach", DATA.map.Vreach, "--c4");
+}
+
+// ---------- readout ----------
+const FSP = "\u2007";  // figure space: digit-wide, keeps the layout stable
+function fmtLat(v){ return Math.abs(v).toFixed(1).padStart(4,FSP)+"°"+(v>=0?"N":"S"); }
+function fmtLon(v){ return Math.abs(v).toFixed(1).padStart(5,FSP)+"°"+(v>=0?"E":"W"); }
+function updateReadout(){
+  const el = document.getElementById("readout");
+  if (state.cur<0){ el.innerHTML=""; return; }
+  const i=state.cur, P=DATA.player, s=state.parcel;
+  const dt = new Date(Date.UTC(P.year[i],0,1) + (P.doy[i]-1)*864e5)
+      .toISOString().slice(0,10);
+  const et=P["Etop"+s][i], em=P["Emax"+s][i];
+  const er=P["Ereach"+s][i];
+  const flip = em>0 && et===0;
+  const hh = String(P.hour[i]).padStart(2,"0");
+  const L = k => { const v=P[k+s][i]; return v>0 ? v.toFixed(0) : "–"; };
+  const vt=P.Vtop[i], vm=P.Vmax[i];
+  const dpi = (vt>=0 && vm>=0) ? Math.abs(vt-vm) : 0;
+  const cc = k => cvar(CONVC[k]);
+  el.innerHTML =
+    `<div><span class="k">date</span><span>${dt} ${hh}Z</span></div>`+
+    `<div><span class="k">pos</span><span>${fmtLat(P.lat[i])} ${fmtLon(P.lon[i])}</span></div>`+
+    `<div><span class="k">SST</span><span>${P.sst[i].toFixed(1)} °C</span></div>`+
+    `<div><span class="k">topology</span><span>${P["topo"+s][i] || "–"}</span></div>`+
+    `<div><span class="k">VMAX top/max</span><span class="${dpi>1?'flip':''}">${vt<0?(P.legfail[i]? "IFL=2 ⚠":"–"):vt.toFixed(1)} / ${vm<0?"–":vm.toFixed(1)} m/s</span></div>`+
+    `<div><span class="k" style="color:${cc('top')}">E top</span><span class="${flip?'flip':''}">${et} J/kg @ ${L("Ltop")} hPa${flip?' ⚠':''}</span></div>`+
+    `<div><span class="k" style="color:${cc('max')}">E max</span><span>${em} J/kg @ ${L("Lmax")} hPa</span></div>`+
+    `<div><span class="k" style="color:${cc('reach')}">E reach</span><span>${er} J/kg @ ${L("Lreach")} hPa</span></div>`;
+}
+
+// ---------- chips ----------
+function anyFilter(){
+  return !!(state.selPos || state.selDoy || state.selHour || state.selYear ||
+            state.selPI) || state.cond !== 0;
+}
+function chipShares(){
+  // live topology distribution under all OTHER filters (crossfilter: the
+  // chip row is itself a marginal, so its own selection is not applied)
+  const cnt = new Float32Array(8);
+  let tot = 0;
+  const cs = DATA.map["c"+state.parcel];
+  for (let i=0;i<cs.length;i++){
+    if (!passMap(i, "cls")) continue;
+    cnt[cs[i]]++; tot++;
+  }
+  return [cnt, tot];
+}
+function buildChips(){
+  if (!DATA.map) return;
+  const host=document.getElementById("chips");
+  host.innerHTML="";
+  let live = null, ltot = 0;
+  if (anyFilter()){ [live, ltot] = chipShares(); }
+  const mk=(label,cls,share)=>{
+    const b=document.createElement("button");
+    b.className="chip"; b.setAttribute("aria-pressed", String(state.cls===cls));
+    if (cls>=0){
+      const sw=document.createElement("span"); sw.className="sw";
+      sw.style.background=classColor(cls); b.appendChild(sw);
+    }
+    const t=document.createElement("span"); t.className="mono"; t.textContent=label;
+    b.appendChild(t);
+    if (share!=null){
+      const p=document.createElement("span"); p.className="pct";
+      if (live){
+        p.textContent = ltot ? (100*live[cls]/ltot).toFixed(1)+"%" : "\u2013";
+      } else {
+        p.textContent = share.toFixed(1)+"%";
+      }
+      b.appendChild(p);
+    }
+    b.addEventListener("click",()=>{ state.cls=cls; buildChips(); buildConds();
+      invalidate(); buildSelRow(); retick(); });
+    host.appendChild(b);
+  };
+  mk("ALL",-1,null);
+  // adaptive chip list: under active filters, sort by filtered frequency and
+  // mask off empty classes (the selected class stays visible so it can be
+  // deselected); otherwise the canonical global-frequency order
+  let items = DATA.classes[state.parcel].map(([t, c, s], k) => ({t, k, s}));
+  if (live){
+    for (const it of items) it.n = live[it.k];
+    items.sort((a, b) => b.n - a.n);
+    items = items.filter(it => it.n > 0 || state.cls === it.k);
+  }
+  items.forEach(it => mk(it.t, it.k, it.s));
+}
+
+// ---------- engine ----------
+let timer=null;
+function invalidate(){
+  densKey = "";
+  scatCaches.scatmax.key = "";
+  scatCaches.scatreach.key = "";
+  for (const k in histCaches) delete histCaches[k];
+}
+function tickOnce(){
+  if (!DATA.map) return;
+  const p = pool();
+  if (!p.length) return;
+  state.cur = p[Math.floor(Math.random()*p.length)];
+  state.trail.push(state.cur);
+  if (state.trail.length>9) state.trail.shift();
+  state.pulses.push({lat:DATA.player.lat[state.cur], lon:DATA.player.lon[state.cur],
+                     t0:performance.now(),
+                     col:classColor(DATA.player["c"+state.parcel][state.cur])});
+  drawScope(); updateReadout();
+}
+function setTimer(){
+  if (timer) clearInterval(timer);
+  timer = state.playing ? setInterval(tickOnce, 1000/state.speed) : null;
+  document.getElementById("play").textContent = state.playing ? "Pause" : "Play";
+  document.getElementById("play").setAttribute("aria-pressed", String(state.playing));
+}
+function frame(){
+  const now=performance.now();
+  drawMap(now); drawRing(now); drawHours(now); drawYears(now); drawScatter();
+  requestAnimationFrame(frame);
+}
+
+// ---------- marginal selection: click handlers ----------
+function evXY(cv, e){
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height];
+}
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function doyLabel(d){
+  const dt = new Date(Date.UTC(2001,0,1)+(d-1)*864e5);
+  return MONTHS[dt.getUTCMonth()]+" "+String(dt.getUTCDate()).padStart(2,"0");
+}
+// keep the current profile through any filter/parcel change that still
+// contains it; resample only when it falls outside the new subset
+function retick(){
+  if (passPlayer(state.cur)){ drawScope(); updateReadout(); }
+  else tickOnce();
+}
+function selChanged(){ invalidate(); buildChips(); buildConds(); buildSelRow(); retick(); }
+function buildSelRow(){
+  if (!DATA.map) return;
+  const host = document.getElementById("selrow");
+  host.innerHTML = "";
+  const mk = (label, clear) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    const t = document.createElement("span"); t.className="mono"; t.textContent = label;
+    const x = document.createElement("span"); x.className="x"; x.textContent = "\u00d7";
+    b.append(t, x);
+    b.addEventListener("click", ()=>{ clear(); selChanged(); });
+    host.appendChild(b);
+  };
+  if (state.selPos)
+    mk(`pos ${fmtLat(state.selPos.lat)} ${fmtLon(state.selPos.lon)} \u00b1${RAD_KM} km`,
+       ()=> state.selPos = null);
+  if (state.selDoy)
+    mk(`doy ${doyLabel(state.selDoy.d)} \u00b1${DOY_W}d`, ()=> state.selDoy = null);
+  if (state.selHour)
+    mk(`hour ${String(state.selHour.h).padStart(2,"0")}Z \u00b1${HOUR_W}h`,
+       ()=> state.selHour = null);
+  if (state.selYear)
+    mk(`year ${state.selYear.y}`, ()=> state.selYear = null);
+  if (state.selPI){
+    const S = state.selPI;
+    mk(`\u0394VMAX(${S.which}) @ top ${S.v.toFixed(0)}\u00b1${S.dv} \u00b7 `+
+       `\u0394 ${S.d>=0?"+":""}${S.d.toFixed(1)}\u00b1${S.dd}`,
+       ()=> state.selPI = null);
+  }
+  // matching counts are always shown: they reflect ALL active filters
+  // (parcel, topology, condition, and any marginal selections)
+  const n = pool().length;
+  let m = 0, tot = 0;
+  const csAll = DATA.map["c"+state.parcel];
+  for (let i=0;i<DATA.map.lat.length;i++){
+    if (csAll[i] >= 0) tot++;
+    if (passMap(i)) m++;
+  }
+  // retained share of the parcel's population, with adaptive precision so
+  // tiny fractions stay visible (e.g. the 8 legacy failures ~ 0.020%)
+  const pct = tot ? 100*m/tot : 0;
+  const pctStr = pct === 0 ? "0" : (pct >= 0.1 ? pct.toFixed(1) : pct.toPrecision(2));
+  const c = document.createElement("span");
+  c.className = "chip cnt mono";
+  c.textContent = `${n} flip sample${n===1?"":"s"} \u00b7 `+
+    `${m.toLocaleString("en-US")} of ${tot.toLocaleString("en-US")} columns \u00b7 `+
+    `${pctStr}% retained`;
+  host.appendChild(c);
+}
+// share of each condition within the population passing all OTHER filters
+// (parcel, topology, marginals, dVMAX selection) -- one full-table pass,
+// mirroring condPassMap exactly
+function condShares(){
+  const n = DATA.map.lat.length, gp = DATA.map.gpi;
+  const gv = DATA.map["g"+state.parcel];
+  const out = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+  let tot = 0;
+  for (let i=0;i<n;i++){
+    if (!passMap(i, "cond")) continue;
+    tot++;
+    const g = gv[i];
+    if ((g & 2) !== 0){ if ((g & 1) === 0) out[1]++; else out[2]++; }
+    if ((g & 4) !== 0) out[3]++;
+    const q = gp[i];
+    if (q === 2) out[4]++; else if (q === 3) out[6]++; else if (q === 1) out[5]++;
+  }
+  return [out, tot];
+}
+function pctFmt(m, tot){
+  if (!tot || !m) return "0%";
+  const p = 100*m/tot;
+  return (p >= 0.1 ? p.toFixed(1) : p.toPrecision(2))+"%";
+}
+function buildConds(){
+  const host = document.getElementById("conds");
+  host.innerHTML = "";
+  const cs = DATA.map ? condShares() : null;
+  for (const [label, id] of CONDS){
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.setAttribute("aria-pressed", String(state.cond === id));
+    const t = document.createElement("span"); t.textContent = label; b.appendChild(t);
+    if (cs && id !== 0){
+      const p = document.createElement("span"); p.className = "pct";
+      p.textContent = pctFmt(cs[0][id], cs[1]);
+      b.appendChild(p);
+    }
+    b.addEventListener("click", ()=>{ state.cond = id; buildConds(); invalidate();
+      buildChips(); buildSelRow(); retick(); });
+    host.appendChild(b);
+  }
+}
+document.getElementById("map").addEventListener("click", e=>{
+  const [cv] = ctx2("map");
+  const [x,y] = evXY(cv, e);
+  state.selPos = {lat: +(MEXT.lb - y/cv.height*(MEXT.lb-MEXT.la)).toFixed(1),
+                  lon: +(MEXT.lo + x/cv.width*360).toFixed(1)};
+  selChanged();
+});
+document.getElementById("ring").addEventListener("click", e=>{
+  const [cv] = ctx2("ring");
+  const [x,y] = evXY(cv, e);
+  const C = cv.width/2, dx = x-C, dy = y-C, rr = Math.hypot(dx,dy);
+  if (rr < cv.width*0.12){ state.selDoy = null; selChanged(); return; }
+  let a = Math.atan2(dy,dx) + Math.PI/2;         // 0 at top, clockwise
+  if (a < 0) a += 2*Math.PI;
+  state.selDoy = {d: Math.min(366, Math.max(1, Math.round(a/(2*Math.PI)*366)+1))};
+  selChanged();
+});
+for (const id of ["scatmax","scatreach"]){
+  document.getElementById(id).addEventListener("click", e=>{
+    const [cv] = ctx2(id);
+    const [x,y] = evXY(cv, e);
+    const W=cv.width, H=cv.height, padL=64, padR=14, padT=14, padB=58;
+    const YL = scatCaches[id].YL || 1;
+    if (x < padL || x > W-padR || y < padT || y > H-padB){
+      state.selPI = null; selChanged(); return;
+    }
+    const v = (x-padL)/(W-padL-padR)*AXMAX;
+    const d = YL - (y-padT)/(H-padT-padB)*2*YL;
+    const which = id === "scatmax" ? "max" : "reach";
+    const S = state.selPI;
+    if (S && S.which === which &&
+        Math.abs(v - S.v) <= S.dv && Math.abs(d - S.d) <= S.dd){
+      state.selPI = null;              // click inside the selection clears it
+      selChanged(); return;
+    }
+    state.selPI = {which,
+                   v: +v.toFixed(1), d: +d.toFixed(2), dv: 5,
+                   dd: +Math.max(0.5, 0.1*YL).toFixed(2)};
+    selChanged();
+  });
+}
+document.getElementById("hours").addEventListener("click", e=>{
+  const [cv] = ctx2("hours");
+  const [x,y] = evXY(cv, e);
+  const C = cv.width/2, dx = x-C, dy = y-C, rr = Math.hypot(dx,dy);
+  if (rr < cv.width*0.12){ state.selHour = null; selChanged(); return; }
+  let a = Math.atan2(dy,dx) + Math.PI/2;
+  if (a < 0) a += 2*Math.PI;
+  state.selHour = {h: Math.round(a/(2*Math.PI)*24) % 24};
+  selChanged();
+});
+document.getElementById("years").addEventListener("click", e=>{
+  const [cv] = ctx2("years");
+  const [x] = evXY(cv, e);
+  const padL=16, padR=16;
+  const [y0,y1] = DATA.years, ny=y1-y0+1;
+  const k = Math.floor((x-padL)/((cv.width-padL-padR)/ny));
+  if (k < 0 || k >= ny){ state.selYear = null; }
+  else state.selYear = {y: y0+k};
+  selChanged();
+});
+addEventListener("keydown", e=>{
+  if (e.key === "Escape" &&
+      (state.selPos || state.selDoy || state.selHour || state.selYear ||
+       state.selPI)){
+    state.selPos = state.selDoy = state.selHour = state.selYear = null;
+    state.selPI = null;
+    selChanged();
+  }
+});
+
+document.querySelectorAll("[data-parcel]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    state.parcel=b.dataset.parcel; state.cls=-1; state.trail=[];
+    document.querySelectorAll("[data-parcel]").forEach(x=>
+      x.setAttribute("aria-pressed", String(x===b)));
+    buildChips(); buildConds(); invalidate(); buildSelRow(); drawScope(); retick();
+  });
+});
+document.getElementById("play").addEventListener("click",()=>{
+  state.playing=!state.playing; setTimer();
+});
+document.getElementById("step").addEventListener("click",tickOnce);
+document.getElementById("speed").addEventListener("input",e=>{
+  state.speed=+e.target.value;
+  document.getElementById("spdv").textContent=state.speed+"/s";
+  setTimer();
+});
+addEventListener("keydown",e=>{
+  if (e.code==="Space" && e.target===document.body){
+    e.preventDefault(); state.playing=!state.playing; setTimer();
+  }
+});
+new MutationObserver(()=>{ invalidate(); drawScope(); buildChips(); })
+  .observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",
+  ()=>{ invalidate(); drawScope(); buildChips(); buildConds(); });
+
+document.getElementById("ntc").textContent = DATA.npop.A.toLocaleString("en-US");
+document.getElementById("nbc").textContent = DATA.npop.B.toLocaleString("en-US");
+decodeTables().then(() => {
+  buildChips(); buildConds(); buildSelRow(); tickOnce(); setTimer();
+  requestAnimationFrame(frame);
+});
+</script>
