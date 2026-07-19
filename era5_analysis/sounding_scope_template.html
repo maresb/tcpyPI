@@ -312,7 +312,7 @@ function passMap(i, skip=""){
   if (skip !== "year" && !yearIn(DATA.map.year[i])) return false;
   if (skip !== "pi" && !piIn(DATA.map.Vtop[i], DATA.map.Vmax[i], DATA.map.Vreach[i]))
     return false;
-  return condPassMap(i);
+  return skip === "cond" || condPassMap(i);
 }
 
 // ---------- pools ----------
@@ -821,8 +821,8 @@ function buildChips(){
       }
       b.appendChild(p);
     }
-    b.addEventListener("click",()=>{ state.cls=cls; buildChips(); invalidate();
-      buildSelRow(); retick(); });
+    b.addEventListener("click",()=>{ state.cls=cls; buildChips(); buildConds();
+      invalidate(); buildSelRow(); retick(); });
     host.appendChild(b);
   };
   mk("ALL",-1,null);
@@ -886,7 +886,7 @@ function retick(){
   if (passPlayer(state.cur)){ drawScope(); updateReadout(); }
   else tickOnce();
 }
-function selChanged(){ invalidate(); buildChips(); buildSelRow(); retick(); }
+function selChanged(){ invalidate(); buildChips(); buildConds(); buildSelRow(); retick(); }
 function buildSelRow(){
   if (!DATA.map) return;
   const host = document.getElementById("selrow");
@@ -936,14 +936,44 @@ function buildSelRow(){
     `${pctStr}% retained`;
   host.appendChild(c);
 }
+// share of each condition within the population passing all OTHER filters
+// (parcel, topology, marginals, dVMAX selection) -- one full-table pass,
+// mirroring condPassMap exactly
+function condShares(){
+  const n = DATA.map.lat.length, gp = DATA.map.gpi;
+  const gv = DATA.map["g"+state.parcel];
+  const out = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+  let tot = 0;
+  for (let i=0;i<n;i++){
+    if (!passMap(i, "cond")) continue;
+    tot++;
+    const g = gv[i];
+    if ((g & 2) !== 0){ if ((g & 1) === 0) out[1]++; else out[2]++; }
+    if ((g & 4) !== 0) out[3]++;
+    const q = gp[i];
+    if (q === 2) out[4]++; else if (q === 3) out[6]++; else if (q === 1) out[5]++;
+  }
+  return [out, tot];
+}
+function pctFmt(m, tot){
+  if (!tot || !m) return "0%";
+  const p = 100*m/tot;
+  return (p >= 0.1 ? p.toFixed(1) : p.toPrecision(2))+"%";
+}
 function buildConds(){
   const host = document.getElementById("conds");
   host.innerHTML = "";
+  const cs = DATA.map ? condShares() : null;
   for (const [label, id] of CONDS){
     const b = document.createElement("button");
     b.className = "chip";
     b.setAttribute("aria-pressed", String(state.cond === id));
     const t = document.createElement("span"); t.textContent = label; b.appendChild(t);
+    if (cs && id !== 0){
+      const p = document.createElement("span"); p.className = "pct";
+      p.textContent = pctFmt(cs[0][id], cs[1]);
+      b.appendChild(p);
+    }
     b.addEventListener("click", ()=>{ state.cond = id; buildConds(); invalidate();
       buildChips(); buildSelRow(); retick(); });
     host.appendChild(b);
@@ -1025,7 +1055,7 @@ document.querySelectorAll("[data-parcel]").forEach(b=>{
     state.parcel=b.dataset.parcel; state.cls=-1; state.trail=[];
     document.querySelectorAll("[data-parcel]").forEach(x=>
       x.setAttribute("aria-pressed", String(x===b)));
-    buildChips(); invalidate(); buildSelRow(); drawScope(); retick();
+    buildChips(); buildConds(); invalidate(); buildSelRow(); drawScope(); retick();
   });
 });
 document.getElementById("play").addEventListener("click",()=>{
@@ -1045,7 +1075,7 @@ addEventListener("keydown",e=>{
 new MutationObserver(()=>{ invalidate(); drawScope(); buildChips(); })
   .observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",
-  ()=>{ invalidate(); drawScope(); buildChips(); });
+  ()=>{ invalidate(); drawScope(); buildChips(); buildConds(); });
 
 document.getElementById("ntc").textContent = DATA.npop.A.toLocaleString("en-US");
 document.getElementById("nbc").textContent = DATA.npop.B.toLocaleString("en-US");
