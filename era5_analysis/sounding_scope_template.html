@@ -86,7 +86,7 @@ footer b{color:var(--ink)}
 
 <header>
   <h1>Sounding Scope</h1>
-  <span class="sub">buoyancy-profile flipbook over <span class="mono" id="ntc"></span> TC-relevant ERA5 columns (SST ≥ 26 °C) · conditioned on sign topology</span>
+  <span class="sub">buoyancy-profile flipbook over <span class="mono" id="ntc"></span> global ERA5 ocean columns · parcels B/C on the <span class="mono" id="nbc"></span> with a converged storm pressure (SST &gt; 5 °C) · conditioned on sign topology</span>
 </header>
 
 <div class="controls">
@@ -155,14 +155,12 @@ function classColor(c){ return cvar("--c"+c); }
 // ---------- pools ----------
 function pool(){
   const cs = DATA.player["c"+state.parcel];
-  if (state.cls < 0) return cs.map((_,i)=>i);
-  const out=[]; for(let i=0;i<cs.length;i++) if(cs[i]===state.cls) out.push(i);
+  const out=[];
+  for (let i=0;i<cs.length;i++){
+    if (cs[i] < 0) continue;                 // parcel undefined for this row
+    if (state.cls < 0 || cs[i] === state.cls) out.push(i);
+  }
   return out;
-}
-function mapFilter(){
-  const cs = DATA.map["c"+state.parcel];
-  if (state.cls < 0) return null;
-  return cs;
 }
 
 // ---------- canvas helpers ----------
@@ -221,19 +219,22 @@ function drawScope(){
 }
 
 // ---------- map ----------
-const MEXT = {lo:-180, hi:180, la:-38, lb:38};
+const MEXT = {lo:-180, hi:180, la:-80, lb:90};
 let densCache = null, densKey = "";
 function buildDensity(){
   const key = state.parcel+"|"+state.cls+"|"+cvar("--bg");
   if (key === densKey && densCache) return densCache;
   const bin = 2, nx = Math.ceil(360/bin), ny = Math.ceil((MEXT.lb-MEXT.la)/bin);
   const cnt = new Float32Array(nx*ny);
-  const mf = mapFilter();
+  const cs = DATA.map["c"+state.parcel];
   const {lat,lon} = DATA.map;
   for (let i=0;i<lat.length;i++){
-    if (mf && mf[i]!==state.cls) continue;
-    const ix = Math.min(nx-1, Math.max(0, Math.floor((lon[i]-MEXT.lo)/bin)));
-    const iy = Math.min(ny-1, Math.max(0, Math.floor((lat[i]-MEXT.la)/bin)));
+    const v = cs[i];
+    if (v < 0) continue;
+    if (state.cls >= 0 && v !== state.cls) continue;
+    const ix = Math.floor((lon[i]-MEXT.lo)/bin);
+    const iy = Math.floor((lat[i]-MEXT.la)/bin);
+    if (ix<0 || ix>=nx || iy<0 || iy>=ny) continue;   // drop, never clamp
     cnt[iy*nx+ix]++;
   }
   let mx=0; for (let k=0;k<cnt.length;k++) if (cnt[k]>mx) mx=cnt[k];
@@ -257,7 +258,7 @@ function drawMap(now){
   const [cv,g] = ctx2("map");
   g.clearRect(0,0,cv.width,cv.height);
   g.strokeStyle = cvar("--grid"); g.lineWidth=1.5;
-  for (let la=-30; la<=30; la+=30){
+  for (let la=-60; la<=60; la+=30){
     const y=(MEXT.lb-la)/(MEXT.lb-MEXT.la)*cv.height;
     g.beginPath(); g.moveTo(0,y); g.lineTo(cv.width,y); g.stroke();
   }
@@ -287,9 +288,11 @@ function drawRing(now){
   const W=cv.width, C=W/2, r0=W*0.23, r1=W*0.42;
   g.clearRect(0,0,W,W);
   const nb=36, cnt=new Float32Array(nb);
-  const mf = mapFilter();
+  const csr = DATA.map["c"+state.parcel];
   for (let i=0;i<DATA.map.doy.length;i++){
-    if (mf && mf[i]!==state.cls) continue;
+    const v = csr[i];
+    if (v < 0) continue;
+    if (state.cls >= 0 && v !== state.cls) continue;
     cnt[Math.min(nb-1, Math.floor((DATA.map.doy[i]-1)/366*nb))]++;
   }
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
@@ -327,9 +330,11 @@ function drawYears(now){
   g.clearRect(0,0,W,H);
   const [y0,y1] = DATA.years, ny=y1-y0+1;
   const cnt=new Float32Array(ny);
-  const mf = mapFilter();
+  const csy = DATA.map["c"+state.parcel];
   for (let i=0;i<DATA.map.year.length;i++){
-    if (mf && mf[i]!==state.cls) continue;
+    const v = csy[i];
+    if (v < 0) continue;
+    if (state.cls >= 0 && v !== state.cls) continue;
     cnt[DATA.map.year[i]-y0]++;
   }
   let mx=1; for (const c of cnt) if (c>mx) mx=c;
@@ -454,6 +459,7 @@ new MutationObserver(()=>{ invalidate(); drawScope(); buildChips(); })
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",
   ()=>{ invalidate(); drawScope(); buildChips(); });
 
-document.getElementById("ntc").textContent = DATA.ntc.toLocaleString("en-US");
+document.getElementById("ntc").textContent = DATA.npop.A.toLocaleString("en-US");
+document.getElementById("nbc").textContent = DATA.npop.B.toLocaleString("en-US");
 buildChips(); tickOnce(); setTimer(); requestAnimationFrame(frame);
 </script>
