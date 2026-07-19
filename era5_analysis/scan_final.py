@@ -30,9 +30,11 @@ from numba import njit, prange
 from tcpyPI import constants, utilities
 from tcpyPI.pi import solve_temperature_from_entropy
 
-PTOP = 10.0  # retain levels with P > 10 hPa -> top 20 hPa; highest observed
-# buoyancy crossing in the 569k-column sample is 49.6 hPa (saturated core
-# parcel), so the retained top sits a 2.5x pressure buffer below it
+PTOP = 20.0  # retain levels with P > 20 hPa -> top 30 hPa: the minimal
+# ceiling observing every buoyancy crossing in the 569k-column sample (highest:
+# 47.6 hPa, saturated core parcel, interpolated between the 50 and 30 hPa
+# nodes). At this ceiling zero profiles clip and zero entropy solves fail (the
+# 30-20 hPa layer caused 21 failures when retained).
 RD = constants.RD
 EPS = constants.EPS
 CKCD = 0.9

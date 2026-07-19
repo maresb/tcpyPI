@@ -151,9 +151,10 @@ footer b{color:var(--ink)}
   (±15 days) or an hour-of-day window (±3 h UTC), the track a single year; each marginal keeps showing the
   density under the <i>other</i> filters, with its own selection dashed.
   Click the × chips or press Escape to clear. The condition chips restrict
-  everything to profiles where the LNB conventions disagree: T/M/F/R lanes on
+  everything to profiles where the LNB conventions disagree: T/M/R lanes on
   the scope mark each convention's LNB (T = legacy topmost, M = max-work,
-  F = first crossing, R = lifted-ballistic); CAPE and potential intensity per
+  R = lifted-ballistic; the first-crossing convention is omitted — it is
+  materially wrong too often to be interesting); CAPE and potential intensity per
   convention appear in the readout (PI computed at tcpyPI's own ptop = 50).
   The eight real columns where the legacy convention fails to converge are
   included — select "legacy non-convergent" to see them.
@@ -171,9 +172,11 @@ const state = {parcel:"B", cls:-1, speed:5, playing:true, cur:-1, trail:[], puls
   selHour:null,  // {h} with +/- HOUR_W hours (circular)
   selYear:null}; // {y}
 const RAD_KM = 1500, DOY_W = 15, HOUR_W = 3;
-state.cond = 0;   // 0 all | 1 clamp-flip | 2 |dE|>10 | 3 |dVMAX|>1 | 4 legacy IFL=2
-const CONDS = [["all profiles",0], ["E_top=0 < E_max",1], ["|E_top\u2212E_max| > 10 J/kg",2],
-               ["|\u0394VMAX| > 1 m/s",3], ["legacy non-convergent",4]];
+state.cond = 0;
+// 0 all | 1 top!=max | 2 reach!=max | 3 clamp-flip | 4 |dVMAX|>1 | 5 legacy IFL=2
+const CONDS = [["all profiles",0], ["top \u2260 max",1], ["reach \u2260 max",2],
+               ["clamp flip (E_top=0<E_max)",3], ["|\u0394VMAX| > 1 m/s",4],
+               ["legacy non-convergent",5]];
 const CONVC = {top:"--c5", max:"--c1", first:"--c2", reach:"--c4"};  // red aqua yellow violet
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -205,17 +208,20 @@ function hourIn(h){
 function yearIn(y){ return !state.selYear || y === state.selYear.y; }
 function condPassMap(i){
   if (state.cond === 0) return true;
-  if (state.cond === 3) return DATA.map.gpi[i] === 2;
-  if (state.cond === 4) return DATA.map.gpi[i] === 1;
+  if (state.cond === 4) return DATA.map.gpi[i] === 2;
+  if (state.cond === 5) return DATA.map.gpi[i] === 1;
   const g = DATA.map["g"+state.parcel][i];
-  return state.cond === 1 ? (g & 1) !== 0 : (g & 2) !== 0;
+  if (state.cond === 1) return (g & 2) !== 0;   // |top-max| > 1 J/kg
+  if (state.cond === 2) return (g & 4) !== 0;   // |reach-max| > 1 J/kg
+  return (g & 1) !== 0;                          // clamp flip
 }
 function condPassPlayer(i){
   if (state.cond === 0) return true;
   const P = DATA.player, s = state.parcel;
-  if (state.cond === 1) return P["Etop"+s][i] === 0 && P["Emax"+s][i] > 0;
-  if (state.cond === 2) return Math.abs(P["Etop"+s][i] - P["Emax"+s][i]) > 10;
-  if (state.cond === 3) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
+  if (state.cond === 1) return Math.abs(P["Etop"+s][i] - P["Emax"+s][i]) > 1;
+  if (state.cond === 2) return Math.abs(P["Ereach"+s][i] - P["Emax"+s][i]) > 1;
+  if (state.cond === 3) return P["Etop"+s][i] === 0 && P["Emax"+s][i] > 0;
+  if (state.cond === 4) return P.Vtop[i] >= 0 && P.Vmax[i] >= 0 &&
                                Math.abs(P.Vtop[i] - P.Vmax[i]) > 1;
   return P.legfail[i] === 1;
 }
@@ -252,7 +258,7 @@ function ctx2(id){
   const cv = document.getElementById(id);
   return [cv, cv.getContext("2d")];
 }
-const yLnTop = Math.log(19), yLnBot = Math.log(1010);
+const yLnTop = Math.log(28), yLnBot = Math.log(1010);
 function yOf(p, h, pad){ return pad + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(h-2*pad); }
 
 // ---------- scope ----------
@@ -266,7 +272,7 @@ function drawScope(){
   const Y = p => padT + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(H-padT-padB);
   g.font = "22px ui-monospace, Menlo, monospace";
   g.strokeStyle = cvar("--grid"); g.fillStyle = cvar("--ink2"); g.lineWidth = 1.6;
-  for (const p of [1000,850,700,500,400,300,200,150,100,70,50,30,20]){
+  for (const p of [1000,850,700,500,400,300,200,150,100,70,50,30]){
     const y = Y(p);
     g.beginPath(); g.moveTo(padL,y); g.lineTo(W-padR,y); g.stroke();
     g.textAlign="right"; g.textBaseline="middle"; g.fillText(String(p), padL-10, y);
@@ -303,13 +309,13 @@ function drawScope(){
   // LNB gutter: one lane per convention; a dot at each convention's LNB
   if (state.cur>=0){
     const s = state.parcel, i = state.cur, Pl = DATA.player;
-    const lanes = [["T","Ltop"], ["M","Lmax"], ["F","Lfirst"], ["R","Lreach"]];
-    const gx0 = W - padR + 18, lane = 26;
+    const lanes = [["T","Ltop"], ["M","Lmax"], ["R","Lreach"]];
+    const gx0 = W - padR + 24, lane = 34;
     g.font = "20px ui-monospace, Menlo, monospace"; g.textAlign = "center";
     lanes.forEach(([lab, key], k)=>{
       const x = gx0 + k*lane;
       const col = cvar(CONVC[key.slice(1).replace("L","")] || "--ink2");
-      g.fillStyle = cvar(CONVC[["top","max","first","reach"][k]]);
+      g.fillStyle = cvar(CONVC[["top","max","reach"][k]]);
       g.textBaseline = "bottom";
       g.fillText(lab, x, padT - 8);
       g.strokeStyle = cvar("--grid"); g.lineWidth = 1.2;
@@ -525,8 +531,9 @@ function drawYears(now){
 }
 
 // ---------- readout ----------
-function fmtLat(v){ return Math.abs(v).toFixed(1)+"°"+(v>=0?"N":"S"); }
-function fmtLon(v){ return Math.abs(v).toFixed(1)+"°"+(v>=0?"E":"W"); }
+const FSP = "\u2007";  // figure space: digit-wide, keeps the layout stable
+function fmtLat(v){ return Math.abs(v).toFixed(1).padStart(4,FSP)+"°"+(v>=0?"N":"S"); }
+function fmtLon(v){ return Math.abs(v).toFixed(1).padStart(5,FSP)+"°"+(v>=0?"E":"W"); }
 function updateReadout(){
   const el = document.getElementById("readout");
   if (state.cur<0){ el.innerHTML=""; return; }
@@ -534,7 +541,7 @@ function updateReadout(){
   const dt = new Date(Date.UTC(P.year[i],0,1) + (P.doy[i]-1)*864e5)
       .toISOString().slice(0,10);
   const et=P["Etop"+s][i], em=P["Emax"+s][i];
-  const ef=P["Efirst"+s][i], er=P["Ereach"+s][i];
+  const er=P["Ereach"+s][i];
   const flip = em>0 && et===0;
   const hh = String(P.hour[i]).padStart(2,"0");
   const L = k => { const v=P[k+s][i]; return v>0 ? v.toFixed(0) : "–"; };
@@ -543,12 +550,12 @@ function updateReadout(){
   const cc = k => cvar(CONVC[k]);
   el.innerHTML =
     `<div><span class="k">date</span><span>${dt} ${hh}Z</span></div>`+
-    `<div><span class="k">pos · SST</span><span>${fmtLat(P.lat[i])} ${fmtLon(P.lon[i])} · ${P.sst[i].toFixed(1)}°C</span></div>`+
+    `<div><span class="k">pos</span><span>${fmtLat(P.lat[i])} ${fmtLon(P.lon[i])}</span></div>`+
+    `<div><span class="k">SST</span><span>${P.sst[i].toFixed(1)} °C</span></div>`+
     `<div><span class="k">topology</span><span>${P["topo"+s][i] || "–"}</span></div>`+
     `<div><span class="k">VMAX top/max</span><span class="${dpi>1?'flip':''}">${vt<0?(P.legfail[i]? "IFL=2 ⚠":"–"):vt.toFixed(1)} / ${vm<0?"–":vm.toFixed(1)} m/s</span></div>`+
     `<div><span class="k" style="color:${cc('top')}">T top</span><span class="${flip?'flip':''}">${et} J/kg @ ${L("Ltop")} hPa${flip?' ⚠':''}</span></div>`+
     `<div><span class="k" style="color:${cc('max')}">M max</span><span>${em} J/kg @ ${L("Lmax")} hPa</span></div>`+
-    `<div><span class="k" style="color:${cc('first')}">F first</span><span>${ef} J/kg @ ${L("Lfirst")} hPa</span></div>`+
     `<div><span class="k" style="color:${cc('reach')}">R reach</span><span>${er} J/kg @ ${L("Lreach")} hPa</span></div>`;
 }
 

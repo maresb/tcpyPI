@@ -153,7 +153,8 @@ mappts = {
 }
 for pname in "ABC":
     mappts[f"c{pname}"] = [int(cls(pname, i)) for i in msel]
-    # disagreement bitmask: 1 = E_top clamped to 0 while E_max>0; 2 = |dE|>10
+    # disagreement bitmask: 1 = clamp-flip (E_top=0 while E_max>0);
+    # 2 = |E_top-E_max| > 1 J/kg; 4 = |E_reach-E_max| > 1 J/kg
     o = z[pname]
     m = popmask[pname]
     g = []
@@ -162,8 +163,10 @@ for pname in "ABC":
         if m[i]:
             if o[i, 2] == 0.0 and o[i, 3] > 0.0:
                 v |= 1
-            if abs(o[i, 2] - o[i, 3]) > 10.0:
+            if abs(o[i, 2] - o[i, 3]) > 1.0:
                 v |= 2
+            if abs(o[i, 5] - o[i, 3]) > 1.0:
+                v |= 4
         g.append(v)
     mappts[f"g{pname}"] = g
 dv = np.abs(PI["VMAX"][msel, 0] - PI["VMAX"][msel, 1])

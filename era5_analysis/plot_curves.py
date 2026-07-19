@@ -30,7 +30,7 @@ plt.rcParams.update({
 
 z = np.load(f"{SCRATCH}/topology_curves.npz")
 P = z["P"]
-YT = [1000, 850, 700, 500, 400, 300, 200, 150, 100, 70, 50, 30, 20]
+YT = [1000, 850, 700, 500, 400, 300, 200, 150, 100, 70, 50, 30]
 
 groups = {}
 for k in z.files:
@@ -73,7 +73,7 @@ for pname, items in groups.items():
                 label="pointwise median")
         ax.axvline(0, color=INK, lw=0.9, zorder=4)
         ax.set_yscale("log")
-        ax.set_ylim(1010, 19)
+        ax.set_ylim(1010, 28)
         ax.set_yticks(YT)
         ax.set_yticklabels([str(t) for t in YT])
         ax.minorticks_off()

@@ -68,11 +68,11 @@ and `pi_conv.py` cross-checks).
   ~20x more often than legacy. Where PI matters (SST >= 26), top vs max
   agree to p99 = 0.53 m/s.
 - Column ceiling: the topology chain (`scan_final.py` onward) retains
-  levels down to 20 hPa (ptop=10), a 2.5x pressure buffer below the highest
-  buoyancy crossing observed anywhere in the sample (49.6 hPa, saturated
-  core parcel; parcel B max 66.8, parcel A max 87.5). With that ceiling no
-  parcel is clipped (zero `+`-ending topologies); 21 of 569,478 parcel-A
-  columns fail the entropy solve in the 30-20 hPa range and are flagged.
+  levels down to 30 hPa (ptop=20) -- the minimal ceiling observing every
+  buoyancy crossing in the sample. Highest crossing: 47.6 hPa (saturated
+  core parcel, interpolated between the 50 and 30 hPa nodes; parcel B max
+  65.0, parcel A max 87.5). At this ceiling zero profiles clip AND zero
+  entropy solves fail (retaining the 30-20 hPa layer caused 21 failures).
   tcpyPI's own ptop=50 convention (used by the pi()/CAPE scans above)
   truncates at 70 hPa and clips 1.24% of TC-relevant core parcels, whose
   true crossings sit at median 68.6 hPa. The solver's `ENEW > P-1` guard
