@@ -311,18 +311,19 @@ function passMap(i, skip=""){
 }
 
 // ---------- pools ----------
-function pool(){
+function passPlayer(i){
+  if (i == null || i < 0) return false;
   const cs = DATA.player["c"+state.parcel], P = DATA.player;
+  if (cs[i] < 0) return false;               // parcel undefined for this row
+  if (state.cls >= 0 && cs[i] !== state.cls) return false;
+  if (!posIn(P.lat[i], P.lon[i]) || !doyIn(P.doy[i]) ||
+      !hourIn(P.hour[i]) || !yearIn(P.year[i])) return false;
+  if (!piIn(P.Vtop[i], P.Vmax[i], P.Vreach[i])) return false;
+  return condPassPlayer(i);
+}
+function pool(){
   const out=[];
-  for (let i=0;i<cs.length;i++){
-    if (cs[i] < 0) continue;                 // parcel undefined for this row
-    if (state.cls >= 0 && cs[i] !== state.cls) continue;
-    if (!posIn(P.lat[i], P.lon[i]) || !doyIn(P.doy[i]) ||
-        !hourIn(P.hour[i]) || !yearIn(P.year[i])) continue;
-    if (!piIn(P.Vtop[i], P.Vmax[i], P.Vreach[i])) continue;
-    if (!condPassPlayer(i)) continue;
-    out.push(i);
-  }
+  for (let i=0;i<DATA.player.lat.length;i++) if (passPlayer(i)) out.push(i);
   return out;
 }
 
@@ -816,7 +817,7 @@ function buildChips(){
       b.appendChild(p);
     }
     b.addEventListener("click",()=>{ state.cls=cls; buildChips(); invalidate();
-      buildSelRow(); tickOnce(); });
+      buildSelRow(); retick(); });
     host.appendChild(b);
   };
   mk("ALL",-1,null);
@@ -874,7 +875,13 @@ function doyLabel(d){
   const dt = new Date(Date.UTC(2001,0,1)+(d-1)*864e5);
   return MONTHS[dt.getUTCMonth()]+" "+String(dt.getUTCDate()).padStart(2,"0");
 }
-function selChanged(){ invalidate(); buildChips(); buildSelRow(); tickOnce(); }
+// keep the current profile through any filter/parcel change that still
+// contains it; resample only when it falls outside the new subset
+function retick(){
+  if (passPlayer(state.cur)){ drawScope(); updateReadout(); }
+  else tickOnce();
+}
+function selChanged(){ invalidate(); buildChips(); buildSelRow(); retick(); }
 function buildSelRow(){
   if (!DATA.map) return;
   const host = document.getElementById("selrow");
@@ -933,7 +940,7 @@ function buildConds(){
     b.setAttribute("aria-pressed", String(state.cond === id));
     const t = document.createElement("span"); t.textContent = label; b.appendChild(t);
     b.addEventListener("click", ()=>{ state.cond = id; buildConds(); invalidate();
-      buildChips(); buildSelRow(); tickOnce(); });
+      buildChips(); buildSelRow(); retick(); });
     host.appendChild(b);
   }
 }
@@ -1013,7 +1020,7 @@ document.querySelectorAll("[data-parcel]").forEach(b=>{
     state.parcel=b.dataset.parcel; state.cls=-1; state.trail=[];
     document.querySelectorAll("[data-parcel]").forEach(x=>
       x.setAttribute("aria-pressed", String(x===b)));
-    buildChips(); invalidate(); buildSelRow(); drawScope(); tickOnce();
+    buildChips(); invalidate(); buildSelRow(); drawScope(); retick();
   });
 });
 document.getElementById("play").addEventListener("click",()=>{
