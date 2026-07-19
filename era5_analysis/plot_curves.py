@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-
 BLUE = "#2a78d6"
 DBLUE = "#104281"
 INK = "#0b0b0b"
@@ -31,7 +30,7 @@ plt.rcParams.update({
 
 z = np.load(f"{SCRATCH}/topology_curves.npz")
 P = z["P"]
-YT = [1000, 850, 700, 500, 400, 300, 200, 150, 100, 70]
+YT = [1000, 850, 700, 500, 400, 300, 200, 150, 100, 70, 50, 30, 20]
 
 groups = {}
 for k in z.files:
@@ -50,13 +49,23 @@ for pname, items in groups.items():
     nrow = int(np.ceil(len(items) / ncol))
     fig, axs = plt.subplots(nrow, ncol, figsize=(3.5 * ncol, 4.1 * nrow),
                             sharey=True, squeeze=False)
-    # x-limits from the troposphere below ~125 hPa, where the topology lives
-    # (the stratospheric plunge to -40 K would squash the structure; curves
-    # simply exit the frame near the top)
-    sel = P >= 125
-    allb = np.concatenate([c[:, sel].ravel() for _, _, c in items])
-    lo, hi = np.nanpercentile(allb, [0.5, 99.5])
-    pad = 0.10 * (hi - lo)
+    # x lower limit: most negative interior dip (before the curve's last
+    # positive level); the terminal stratospheric plunge never returns to
+    # positive and should not set the range. 10% margin.
+    lo = 0.0
+    hi = 0.0
+    for _, _, curves_ in items:
+        for c in curves_:
+            fin = np.isfinite(c)
+            pos = np.where(fin & (c > 0))[0]
+            if len(pos):
+                lo = min(lo, np.nanmin(c[: pos[-1] + 1]))
+            hi = max(hi, np.nanmax(c[fin]) if fin.any() else 0.0)
+    hi = min(hi, np.nanpercentile(
+        np.concatenate([c.ravel() for _, _, c in items]), 99.95))
+    lo *= 1.1
+    hi *= 1.05
+    pad = 0.0
     for ax, (share, topo, curves) in zip(axs.flat, items):
         for c in curves:
             ax.plot(c, P, color=BLUE, alpha=0.10, lw=0.7, zorder=3)
@@ -64,7 +73,7 @@ for pname, items in groups.items():
                 label="pointwise median")
         ax.axvline(0, color=INK, lw=0.9, zorder=4)
         ax.set_yscale("log")
-        ax.set_ylim(1010, 66)
+        ax.set_ylim(1010, 19)
         ax.set_yticks(YT)
         ax.set_yticklabels([str(t) for t in YT])
         ax.minorticks_off()
@@ -77,7 +86,7 @@ for pname, items in groups.items():
         ax.set_visible(False)
     axs.flat[0].legend(loc="upper left", frameon=False, fontsize=8)
     fig.suptitle(f"{TITLES[pname]} — {sum(len(c) for _, _, c in items)} sampled buoyancy profiles by topology"
-             " (x-axis clipped to tropospheric range)",
+             " (x-axis clipped to the interior-dip range)",
                  fontsize=11, y=1.005)
     fig.tight_layout()
     fig.savefig(f"{SCRATCH}/curves_parcel_{pname}.png", dpi=140)

@@ -30,8 +30,9 @@ from numba import njit, prange
 from tcpyPI import constants, utilities
 from tcpyPI.pi import solve_temperature_from_entropy
 
-
-PTOP = 50.0
+PTOP = 10.0  # retain levels with P > 10 hPa -> top 20 hPa; highest observed
+# buoyancy crossing in the 569k-column sample is 49.6 hPa (saturated core
+# parcel), so the retained top sits a 2.5x pressure buffer below it
 RD = constants.RD
 EPS = constants.EPS
 CKCD = 0.9

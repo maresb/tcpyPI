@@ -9,7 +9,6 @@ import sys
 
 import numpy as np
 
-
 sys.path.insert(0, SCRATCH)
 sys.path.insert(0, _SRC)
 

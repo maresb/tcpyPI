@@ -10,7 +10,6 @@ import sys
 
 import numpy as np
 
-
 sys.path.insert(0, SCRATCH)
 sys.path.insert(0, _SRC)
 
@@ -134,13 +133,22 @@ for pname in "ABC":
     mappts[f"c{pname}"] = [int(cls(pname, i)) for i in msel]
 
 # per-parcel x-limits for the scope (tropospheric percentiles)
+# x-limits: lower bound = the most negative any curve goes BEFORE its last
+# positive level (interior dips only; the terminal stratospheric plunge never
+# returns to positive and should not set the range), with a 10% margin.
 xlims = {}
 for pname in "ABC":
     arr = np.array([c for c in curves[pname] if len(c)])
-    sel = P >= 125
-    lo, hi = np.percentile(arr[:, sel], [0.5, 99.5])
-    pad = 0.1 * (hi - lo)
-    xlims[pname] = [round(float(lo - pad), 1), round(float(hi + pad), 1)]
+    lo = 0.0
+    for c in arr:
+        pos = np.where(c > 0)[0]
+        if len(pos) == 0:
+            continue
+        m = c[: pos[-1] + 1].min()
+        if m < lo:
+            lo = m
+    hi = float(np.percentile(arr, 99.9))
+    xlims[pname] = [round(float(lo * 1.1), 1), round(hi * 1.05 + 0.5, 1)]
 
 payload = {
     "P": [float(x) for x in P],

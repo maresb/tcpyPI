@@ -67,11 +67,19 @@ and `pi_conv.py` cross-checks).
   max-work fails on 0; first-crossing and lifted-ballistic conventions fail
   ~20x more often than legacy. Where PI matters (SST >= 26), top vs max
   agree to p99 = 0.53 m/s.
-- ptop clipping: the 1.24% of `+`-topology core parcels all cross between
-  70 and 53 hPa (median 68.6) when the column is extended to 20 hPa — the
-  data exists (ERA5 reaches 1 hPa); tcpyPI's ptop=50 retention cuts at
-  70 hPa. The entropy solver's `ENEW > P-1` guard prevents extension beyond
-  ~10-20 hPa without modification.
+- Column ceiling: the topology chain (`scan_final.py` onward) retains
+  levels down to 20 hPa (ptop=10), a 2.5x pressure buffer below the highest
+  buoyancy crossing observed anywhere in the sample (49.6 hPa, saturated
+  core parcel; parcel B max 66.8, parcel A max 87.5). With that ceiling no
+  parcel is clipped (zero `+`-ending topologies); 21 of 569,478 parcel-A
+  columns fail the entropy solve in the 30-20 hPa range and are flagged.
+  tcpyPI's own ptop=50 convention (used by the pi()/CAPE scans above)
+  truncates at 70 hPa and clips 1.24% of TC-relevant core parcels, whose
+  true crossings sit at median 68.6 hPa. The solver's `ENEW > P-1` guard
+  prevents extension beyond ~10-20 hPa without modification. Buoyancy-plot
+  x-ranges are set by the deepest interior dip (the most negative value a
+  curve reaches before its last positive level) plus 10% — the terminal
+  stratospheric plunge never sets the range.
 - Strict from-rest ballistic CAPE is degenerate for surface-launched
   environmental parcels (b(launch) = 0 by construction and surface CIN or
   neutral layering is universal); the lifted-to-LFC variant is the

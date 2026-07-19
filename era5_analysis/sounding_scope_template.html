@@ -168,7 +168,7 @@ function ctx2(id){
   const cv = document.getElementById(id);
   return [cv, cv.getContext("2d")];
 }
-const yLnTop = Math.log(66), yLnBot = Math.log(1010);
+const yLnTop = Math.log(19), yLnBot = Math.log(1010);
 function yOf(p, h, pad){ return pad + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(h-2*pad); }
 
 // ---------- scope ----------
@@ -182,7 +182,7 @@ function drawScope(){
   const Y = p => padT + (Math.log(p)-yLnTop)/(yLnBot-yLnTop)*(H-padT-padB);
   g.font = "22px ui-monospace, Menlo, monospace";
   g.strokeStyle = cvar("--grid"); g.fillStyle = cvar("--ink2"); g.lineWidth = 1.6;
-  for (const p of [1000,850,700,500,400,300,200,150,100,70]){
+  for (const p of [1000,850,700,500,400,300,200,150,100,70,50,30,20]){
     const y = Y(p);
     g.beginPath(); g.moveTo(padL,y); g.lineTo(W-padR,y); g.stroke();
     g.textAlign="right"; g.textBaseline="middle"; g.fillText(String(p), padL-10, y);
