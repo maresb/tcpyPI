@@ -1,0 +1,1771 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.7cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{bbm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks=true,linkcolor=MidnightBlue,citecolor=MidnightBlue,urlcolor=MidnightBlue]{hyperref}
+% TeX Live 2025's microtype 3.2a warns `Command \showhyphens has changed'
+% against this kernel even in an empty document.  Mute the kernel warning
+% during microtype's begin-document check only (hooks run in registration
+% order: mute -> microtype's check -> restore).
+\makeatletter
+\AddToHook{begindocument/before}{\let\ma@saved@warning\@latex@warning@no@line
+  \let\@latex@warning@no@line\@gobble}
+\makeatother
+\usepackage{microtype}
+\makeatletter
+\AddToHook{begindocument}{\let\@latex@warning@no@line\ma@saved@warning}
+\makeatother
+\emergencystretch=1.5em
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+% units
+\newcommand{\hPa}{\,\mathrm{hPa}}
+\newcommand{\Jkg}{\,\mathrm{J\,kg^{-1}}}
+\newcommand{\JkgK}{\,\mathrm{J\,kg^{-1}\,K^{-1}}}
+\newcommand{\K}{\,\mathrm{K}}
+\newcommand{\ms}{\,\mathrm{m\,s^{-1}}}
+% thermodynamic symbols
+\newcommand{\Rd}{R_d}
+\newcommand{\Rv}{R_v}
+\newcommand{\cpd}{c_{pd}}
+\newcommand{\cpv}{c_{pv}}
+\newcommand{\cl}{c_\ell}
+\newcommand{\Lv}{L_v}
+\newcommand{\rt}{r_t}
+\newcommand{\rvv}{r_v}
+\newcommand{\rl}{r_\ell}
+\newcommand{\es}{e_s}
+\newcommand{\pd}{p_d}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Trho}{T_\rho}
+
+\title{Thermodynamic foundations of the moist-parcel entropy in \texttt{tcpyPI}\\
+\large A first-principles derivation of \texttt{entropy\_S}, its conservation,\\
+and the temperature inversion on the reversible adiabat}
+\author{Companion to \emph{An artificial discontinuity in the tcpyPI pressure solver}}
+\date{July 22, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+The potential-intensity solver in \texttt{tcpyPI} lifts an air parcel along a
+\emph{reversible moist adiabat} and, at each pressure level, recovers the
+parcel temperature by holding one quantity fixed: the total specific entropy
+computed by \texttt{utilities.entropy\_S}. This note derives that quantity, and
+everything around it, from first principles. We start from the statistical
+definition of entropy (Boltzmann/Gibbs), pass through the Sackur--Tetrode
+equation to the ideal-gas form $s=c_p\ln T-R\ln p+\mathrm{const}$, treat the
+parcel as a multicomponent Dalton mixture with a condensed phase, derive the
+Clausius--Clapeyron relation and the latent-heat entropy from equality of
+chemical potentials, and assemble Emanuel's total specific entropy
+(E94, eq.~4.5.9)---the exact expression in the code. Three modern interludes
+deepen the statistical part: \emph{canonical typicality}, which derives the
+Boltzmann weights of a small subsystem from a single pure state of one closed
+system---worked exactly on $n$ harmonic oscillators, exceptional states
+included; a \emph{flat-prior audit}, which demotes the equal-\emph{a-priori}
+postulate to a gauge choice within an equivalence class of priors whose only
+invariant is a tilt criterion against the constraint's clamping slope; and the
+\emph{Laplace--Legendre bridge} between the microcanonical
+$S(E)$ and the canonical $Z(\beta)$, including why the hard energy constraint
+and the soft Boltzmann weight are Laplace duals whose equivalence is guarded by
+two separations of scale. We then prove the entropy is
+conserved on the ascent (adiabatic $\Rightarrow$ no entropy flux; reversible
+$\Rightarrow$ no entropy production), give the microscopic Liouville/adiabatic
+-theorem reading of that conservation, and finish with the moist adiabat and
+the well-posed \emph{inversion} $s(T,p)=s_0\mapsto T$ that the solver performs
+by Newton iteration. Every formula is tied back to the specific function and
+constant it corresponds to in the source, and every figure is generated from
+the formulas derived here by \texttt{scripts/foundations\_figs.py}---the
+inversion figure by running the solver's own algebra, cross-checked against the
+source docstrings. Numerical constants are quoted as in
+\texttt{tcpyPI/constants.py}; SI throughout, pressures excepted (hPa).
+\end{abstract}
+
+\tableofcontents
+
+\section{Scope and the target formula}\label{sec:scope}
+
+The object we are after is the total specific entropy per unit mass of
+\emph{dry} air, as coded in \texttt{utilities.entropy\_S(T,R,P)}:
+\begin{equation}\label{eq:target}
+s \;=\; (\cpd+\rt\,\cl)\,\ln T \;-\; \Rd\,\ln(p-e) \;+\; \frac{\Lv\,\rvv}{T}
+     \;-\; \rvv\,\Rv\,\ln H,
+\end{equation}
+with $T$ the temperature (K), $p$ the total pressure, $e$ the partial
+pressure of water vapour, $p-e=\pd$ the partial pressure of dry air,
+$\rt$ the total-water mixing ratio, $\rvv$ the vapour mixing ratio, $\Lv$ the
+latent heat of vaporisation, $H=e/\es$ the relative humidity (capped at $1$),
+and $\cpd,\cl,\Rd,\Rv$ material constants (Table~\ref{tab:const}). The code
+evaluates \eqref{eq:target} at the parcel's launch state, where the air is
+unsaturated so $\rvv=\rt=R$; that is why a single argument \texttt{R} feeds all
+water terms. When the parcel later saturates, the same $s$ is held fixed and
+$T$ is solved for---the \emph{inversion} of \S\ref{sec:inversion}.
+
+Our task is to show where \eqref{eq:target} comes from, why it is the right
+thing to conserve, and why the inversion is well posed. We build it in five
+movements: statistical mechanics (\S\ref{sec:statmech}), classical
+thermodynamic scaffolding (\S\ref{sec:classical}), the multicomponent parcel
+(\S\ref{sec:parcel}), phase equilibrium and latent heat (\S\ref{sec:phase}),
+and the assembly (\S\ref{sec:assembly}). Conservation
+(\S\ref{sec:conservation}), the moist adiabat (\S\ref{sec:adiabat}) and the
+inversion (\S\ref{sec:inversion}) follow.
+
+\begin{table}[htb]
+\centering
+\small
+\begin{tabular}{llr}
+\toprule
+Symbol & Meaning & Value (\texttt{constants.py})\\
+\midrule
+$\cpd$ & specific heat of dry air at const.\ $p$ & $1005.7\JkgK$\\
+$\cpv$ & specific heat of water vapour at const.\ $p$ & $1870.0\JkgK$\\
+$\cl$  & (modified) specific heat of liquid water & $2500.0\JkgK$\\
+$\Rd$  & gas constant of dry air & $287.04\JkgK$\\
+$\Rv$  & gas constant of water vapour & $461.5\JkgK$\\
+$\eps=\Rd/\Rv$ & mass ratio of the two gases & $0.6220$\\
+$\Lv^{0}$ & latent heat at $0^{\circ}$C & $2.501\times10^{6}\Jkg$\\
+$\cpv-\cl$ & Kirchhoff slope $\dd\Lv/\dd T$ & $-630\JkgK$\\
+\bottomrule
+\end{tabular}
+\caption{Material constants, quoted from \texttt{tcpyPI/constants.py}. The
+``modified'' $\cl=2500$ (rather than $4190$) is a tuning of the reference,
+discussed in Remark~\ref{rem:modcl}.}
+\label{tab:const}
+\end{table}
+
+\begin{remark}[notational hazards]\label{rem:notation}
+Several symbols do double duty across the literatures this note joins; we keep
+each field's standard usage and flag the collisions once, here. $\Omega$ is the
+microstate \emph{count} throughout \S\ref{sec:statmech}---except in the ensemble
+table of \S\ref{ssec:operator}, where the grand potential $\Omega(T,V,\mu)$
+regrettably shares the letter (only the count appears beyond that table).
+$\rho(E)$, with an energy argument, is the density of states
+(\S\ref{ssec:bridge}); $\rho$ with a state subscript ($\rho_S$,
+$\rho_{\mathrm{mc}}$) is a density matrix (\S\ref{ssec:typicality}); and the
+$\rho$ in the density temperature $\Trho$ (\S\ref{sec:adiabat}) refers to mass
+density. $\varepsilon$ is a single-particle energy in \S\ref{sec:statmech} and
+retires before the mass ratio $\eps=\Rd/\Rv$ of Table~\ref{tab:const} takes over
+from \S\ref{sec:parcel} on. $\mu$ is a chemical potential in
+\S\ref{ssec:operator} and the mean occupancy $M/n$ in the oscillator example of
+\S\ref{ssec:typicality}. $H$ is relative humidity, while $\hat H$ is a
+Hamiltonian and $\mathcal H$ a Hilbert space; likewise $R$ is a specific gas
+constant except as the code argument \texttt{R} of \texttt{entropy\_S} (a mixing
+ratio), as discussed at \eqref{eq:target}. Context and fonts disambiguate; the
+double-duty is the price of quoting each source in its own dialect.
+\end{remark}
+
+\section{The statistical origin of entropy}\label{sec:statmech}
+
+This is the longest section, and it moves in four sweeps. First the
+\emph{derivation} (\S\ref{ssec:operator}--\ref{ssec:boltzdist}): what the
+symbols mean operator-theoretically, and the Boltzmann distribution obtained
+the classical way, from a reservoir and an equal-probability postulate. Second,
+an \emph{audit} of that derivation's most metaphysical input
+(\S\ref{ssec:typicality}--\ref{ssec:priorclass}): canonical typicality removes
+the ensemble altogether, and a companion argument shows the flat prior is
+merely the convenient representative of an enormous equivalence class. Third,
+the \emph{computation} (\S\ref{ssec:Z}--\ref{ssec:polyatomic}): from $Z$
+through Sackur--Tetrode to $s=c_p\ln T-R\ln p$ for every ideal gas in the
+parcel. Fourth, the \emph{reflection} (\S\ref{ssec:bridge}): the exact
+Laplace--Legendre bridge between the microcanonical $S(E)$ and the canonical
+$Z(\beta)$, closing with the hard-vs-soft-constraint reading of everything that
+came before. The payoff, \S\ref{ssec:buildingblock}, feeds the rest of the
+note.
+
+\subsection{The operator picture underneath}\label{ssec:operator}
+
+Before the classical development, it is worth stating the exact
+quantum-statistical object that development approximates, because it removes
+several apparent ambiguities in the symbol ``$\sum_i$'' that a careful reader
+will otherwise trip on. Rigorously, energy is not a number but the Hamiltonian
+\emph{operator} $\hat H$ acting on the $N$-particle Hilbert space
+$\mathcal H_N$, and the partition function is a trace,
+\begin{equation}\label{eq:trace}
+Z=\operatorname{Tr}e^{-\beta\hat H},
+\end{equation}
+whose value is independent of the basis in which it is evaluated. The microstate
+energies $\{E_i\}$ are the eigenvalues of $\hat H$; the index $i$ labels an
+orthonormal energy eigenbasis; and the classical sum $\sum_i e^{-\beta E_i}$
+used throughout this section is exactly \eqref{eq:trace} written in that
+eigenbasis, where $\hat H$ is diagonal with entries $E_i$. Three things this
+clarifies at once:
+\begin{itemize}
+\item \textbf{The index $i$ is discrete, and $\mathcal H_N,\hat H$ depend on
+$(V,N)$.} Confinement to a finite volume discretises the spectrum---a particle
+in a box of side $V^{1/3}$ has $\varepsilon\propto(n_x^2+n_y^2+n_z^2)\,V^{-2/3}$
+with $n\in\mathbb Z_+^3$---so $i$ is a genuine countable label, not a continuum.
+The parameters $V$ and $N$ do \emph{not} index microstates; they select which
+Hilbert space and Hamiltonian one is on. Fixing $(V,N)$, as the canonical
+ensemble does, means tracing over the eigenbasis of one definite operator
+$\hat H_{V,N}$.
+\item \textbf{The classical sum is the $\hbar\to0$ limit.} The trace
+\eqref{eq:trace} reduces to the phase-space integral
+$(N!\,h^{3N})^{-1}\!\int\dd\Gamma\,e^{-\beta H_{\mathrm{cl}}}$ of
+\S\ref{ssec:lambda}, with relative corrections $O(\hbar^2)$. The factors
+$h^{3N}$ (one quantum state per phase-space cell of volume $h^{3N}$) and $N!$
+(indistinguishability, from the (anti)symmetrisation
+$\mathcal H_N\subset\mathcal H_1^{\otimes N}$) are \emph{not} classical
+inputs---they are residues of the quantum count, which is why they enter
+\eqref{eq:ztrans2}--\eqref{eq:ZN} seemingly by fiat.
+\item \textbf{Everything is a spectral functional of $\hat H$.} $Z(\beta)$ is
+the Laplace transform of the density of states
+$\rho(E)=\operatorname{Tr}\delta(E-\hat H)$, and $F,\langle E\rangle,S$ all
+follow from it by one derivative each---spelled out in \S\ref{ssec:Z},
+\[
+F=-k_BT\ln Z,\qquad
+\langle E\rangle=-\frac{\partial\ln Z}{\partial\beta},\qquad
+S=\frac{\langle E\rangle-F}{T}=-\frac{\partial F}{\partial T}
+\]
+---so thermodynamics is the spectral geometry of the Hamiltonian. For
+$N$ free identical particles the canonical $Z_N$ is, exactly, a symmetric
+function of the single-particle Boltzmann weights $x_k=e^{-\beta\varepsilon_k}$
+(one weight per single-particle level $k$), and \emph{which} symmetric function
+records the exchange statistics:
+\begin{itemize}
+\item the elementary $e_N(x)=\sum_{k_1<\dots<k_N}x_{k_1}\cdots x_{k_N}$ for
+\textbf{fermions} (strictly increasing indices $\Rightarrow$ no level used
+twice---Pauli exclusion);
+\item the complete homogeneous
+$h_N(x)=\sum_{k_1\le\dots\le k_N}x_{k_1}\cdots x_{k_N}$ for \textbf{bosons}
+($\le\Rightarrow$ any level may repeat, any occupation allowed);
+\item the leading power-sum term $p_1(x)^N/N!$, with $p_1(x)=\sum_k x_k=z$, for
+the \textbf{Maxwell--Boltzmann count}---the classical $z^N/N!$ of
+\eqref{eq:ZN} (derived in \S\ref{ssec:Z}): particles taken as independent and
+then divided by $N!$ for indistinguishability, the dilute, non-degenerate limit
+(\S\ref{ssec:lambda}) in which the fermion/boson distinction washes out.
+\end{itemize}
+So the indistinguishability that forces the $N!$ is the $S_N$-symmetry of these
+functions.
+\end{itemize}
+Finally, the various \emph{ensembles} are Legendre transforms of one another,
+each holding fixed a different member of the conjugate pairs $(E,T)$, $(V,p)$,
+and $(N,\mu)$---energy with temperature, volume with pressure $p$, and particle
+number with chemical potential $\mu$ (the free-energy cost of adding one
+particle); ``summing over'' a mechanical variable trades it for its conjugate:
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+sum runs over & held fixed & potential\\
+\midrule
+microstates ($E$ free) & $E,V,N$ & $S(E,V,N)$\quad(microcanonical)\\
+microstates & $T,V,N$ & $F(T,V,N)$\quad(canonical)\\
+microstates $+\;N$ & $T,V,\mu$ & $\Omega(T,V,\mu)$\quad(grand)\\
+microstates $+\;V$ & $T,p,N$ & $G(T,p,N)$\quad(isobaric)\\
+\bottomrule
+\end{tabular}
+\end{center}
+(The grand potential $\Omega(T,V,\mu)$ shares its letter with the microstate
+count---Remark~\ref{rem:notation}; only the count appears from here on.)
+The canonical development below fixes $(T,V,N)$ and works with $F$; the parcel
+of the companion analysis ultimately wants $(T,p)$---the Gibbs potential
+$G$---which is why the specific entropy is finally expressed as $s(T,p)$ and
+inverted for $T$ at prescribed $p$. What follows carries out \eqref{eq:trace} in
+its classical $\hbar\to0$ form; the operator identity is the exact statement
+being approximated.
+
+\subsection{Boltzmann and Gibbs, and the system we will use}\label{ssec:BG}
+
+Entropy is, microscopically, a count of microstates. Fix the system once, for
+the whole section: a gas of $N$ particles, each of mass $m$, confined to a
+container of volume $V$ and held in equilibrium at temperature $T$. Its
+\emph{macrostate} is specified by the three numbers $(T,V,N)$; a
+\emph{microstate} $i$ is a complete specification of every particle's position
+and momentum (classically) or of the joint quantum state (quantally), and has a
+definite total energy $E_i$. This distinction---$E_i$ is the energy of the
+\emph{whole system} in microstate $i$, whereas $\varepsilon$ (introduced in
+\S\ref{ssec:lambda}) will denote the energy of a \emph{single particle}---is
+used consistently below.
+
+For an \emph{isolated} system all $\Omega$ microstates consistent with the
+macrostate are equally probable (the fundamental postulate of statistical
+mechanics), and Boltzmann's principle is
+\begin{equation}\label{eq:boltzmann}
+S \;=\; k_B \ln \Omega ,\qquad k_B=1.381\times10^{-23}\,\mathrm{J\,K^{-1}} .
+\end{equation}
+A parcel is \emph{not} isolated---it exchanges energy with its surroundings---so
+its microstates are not equiprobable; they carry probabilities $p_i$, and the
+entropy is the more general Gibbs (information) form
+\begin{equation}\label{eq:gibbs}
+S \;=\; -k_B \sum_i p_i \ln p_i ,
+\end{equation}
+which reduces to \eqref{eq:boltzmann} when the $p_i$ are uniform, $p_i=1/\Omega$.
+To use \eqref{eq:gibbs} we must first find the $p_i$.
+
+\subsection{The Boltzmann distribution from energy conservation}\label{ssec:boltzdist}
+
+The $p_i$ are fixed by one physical input---\emph{conservation of energy}
+between the system and its surroundings---plus the postulate above. Put the
+system in weak thermal contact with a large reservoir (subscript $\mathrm{res}$
+throughout this subsection; not to be confused with the specific gas constant
+$R$ that appears bare from \S\ref{ssec:intensive} onward), and treat the
+composite (system $+$ reservoir) as isolated with a fixed total energy
+\begin{equation}\label{eq:econs}
+E_{\mathrm{tot}}=E_i+E_{\mathrm{res}}=\mathrm{const}.
+\end{equation}
+``Weak contact'' means the interaction energy is negligible, so the energies are
+additive \eqref{eq:econs}; ``isolated composite'' lets us apply the equal-\emph{a
+priori}-probability postulate to it. When the system sits in one definite
+microstate $i$ (energy $E_i$), the reservoir may be in any of its
+$\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)$ microstates, all equally likely. Hence the
+probability of system-microstate $i$ is proportional to that reservoir count,
+\begin{equation}\label{eq:pprop}
+p_i \;\propto\; \Omega_{\mathrm{res}}\!\big(E_{\mathrm{tot}}-E_i\big).
+\end{equation}
+Because the reservoir is large, $E_i\ll E_{\mathrm{tot}}$, so expand its
+\emph{logarithm} (the extensive quantity) to first order:
+\begin{equation}\label{eq:expand}
+\ln\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)
+\;\simeq\;\ln\Omega_{\mathrm{res}}(E_{\mathrm{tot}})
+-E_i\underbrace{\frac{\partial\ln\Omega_{\mathrm{res}}}{\partial E}\Big|_{E_{\mathrm{tot}}}}_{\displaystyle\equiv\,\beta}.
+\end{equation}
+The coefficient $\beta$ is a property of the reservoir alone; by
+\eqref{eq:boltzmann} applied to the reservoir, $S_{\mathrm{res}}=k_B\ln\Omega_{\mathrm{res}}$, and the
+thermodynamic definition of temperature $1/T=\partial S_R/\partial E$, it is
+\begin{equation}\label{eq:beta}
+\beta=\frac{1}{k_B}\frac{\partial S_{\mathrm{res}}}{\partial E}=\frac{1}{k_BT}.
+\end{equation}
+Exponentiating \eqref{eq:expand} and absorbing the $E_i$-independent factor into
+the normalisation gives the \emph{Boltzmann distribution}
+\begin{equation}\label{eq:boltzdist}
+p_i=\frac{e^{-\beta E_i}}{Z},\qquad
+Z=\sum_i e^{-\beta E_i},
+\end{equation}
+with the \emph{partition function} $Z$ enforcing $\sum_i p_i=1$. The
+assumptions are now explicit: (i) equal \emph{a priori} probabilities for the
+isolated composite; (ii) conservation of energy \eqref{eq:econs}; (iii) a
+reservoir large enough that the linear term in \eqref{eq:expand} suffices; (iv)
+weak coupling, so energies add. (Equivalently, by Jaynes' maximum-entropy
+argument, \eqref{eq:boltzdist} is the distribution that maximises
+\eqref{eq:gibbs} subject only to $\sum_i p_i=1$ and a fixed mean energy
+$\langle E\rangle=\sum_i p_iE_i$, with $\beta$ the Lagrange multiplier for
+energy---the two derivations agree.) Assumption~(i) is the one that feels
+metaphysical---why should ignorance be \emph{flat}?---and the next two
+subsections take it apart from opposite ends: \S\ref{ssec:typicality} removes
+the ensemble altogether (a single pure state suffices), and
+\S\ref{ssec:priorclass} shows that even within ensemble language the flat
+prior is only the convenient representative of an enormous class of priors
+that all give the same physics.
+
+\subsection{The reservoir from the inside: canonical typicality and the
+\texorpdfstring{$n$}{n}-oscillator example}\label{ssec:typicality}
+
+The derivation just given works, but three of its four inputs are uncomfortable
+to a reader who believes the world is one closed system evolving unitarily. The
+reservoir is an external object introduced by hand; the equal-\emph{a priori}
+-probability postulate~(i) is imposed, not derived; and the ensemble language
+treats $p_i$ as a subjective distribution over copies rather than a property of
+a single physical state. There is a modern reading---\emph{canonical
+typicality} (Popescu, Short and Winter, \emph{Nat.\ Phys.}~\textbf{2}, 754
+(2006); Goldstein, Lebowitz, Tumulka and Zangh\`i, \emph{Phys.\ Rev.\ Lett.}
+\textbf{96}, 050403 (2006))---that produces the \emph{same} Boltzmann weights
+from a single pure state of one closed system, with the postulate replaced by a
+theorem. It is worth a page, both because it dissolves the discomfort and
+because the oscillator makes every object in it explicit.
+
+\paragraph{The general statement.} Split the closed system into the piece we
+observe and the rest, $\mathcal H=\mathcal H_S\otimes\mathcal H_E$ (``$S$'' the
+system, ``$E$'' its environment; dimensions $d_S,d_E$), and impose a global
+constraint---here a fixed total energy in a thin shell---by restricting to a
+subspace $\mathcal H_R\subseteq\mathcal H$ of dimension $d_R=\dim\mathcal H_R$.
+This $d_R$ is exactly the microstate count $\Omega$ of \eqref{eq:boltzmann}, now
+read as a Hilbert-space dimension. The uniform (microcanonical) mixture on the
+shell is $\rho_{\mathrm{mc}}=\mathbbm{1}_R/d_R$, and its reduction defines what PSW
+call the \emph{canonical state} of the system,
+\begin{equation}\label{eq:psw-can}
+\varrho_S \;\equiv\; \operatorname{Tr}_E\,\rho_{\mathrm{mc}}
+        \;=\; \operatorname{Tr}_E\frac{\mathbbm{1}_R}{d_R}.
+\end{equation}
+Here $\operatorname{Tr}_E$ is the \emph{partial} trace over the environment---the
+linear map from operators on $\mathcal H_S\otimes\mathcal H_E$ to operators on
+$\mathcal H_S$ fixed on product operators by
+\begin{equation}\label{eq:ptrace}
+\operatorname{Tr}_E(A\otimes B)=A\,\operatorname{Tr}B
+\qquad\Big(\text{contrast the full trace }
+\operatorname{Tr}(A\otimes B)=\operatorname{Tr}A\,\operatorname{Tr}B\Big),
+\end{equation}
+and on a general operator by linearity. It contracts the $E$ factor to a number
+while leaving the $S$ factor intact, so---unlike the full trace---it returns an
+\emph{operator} on $\mathcal H_S$, not a scalar; \eqref{eq:psw-can} is thus a
+genuine density matrix on $S$, as is the pure-state reduction introduced next.
+Now take a \emph{single} pure state $|\phi\rangle\in\mathcal H_R$---one definite
+vector, no ensemble---and form its reduced density matrix
+$\rho_S=\operatorname{Tr}_E|\phi\rangle\langle\phi|$. The theorem is that for the
+overwhelming majority of $|\phi\rangle$ (Haar measure\footnote{The Haar
+(uniform) measure is the unique probability measure on the unit sphere of
+$\mathcal H_R$ invariant under every unitary; operationally, draw the components
+of $|\phi\rangle$ in any basis as i.i.d.\ complex Gaussians and normalise. This
+is also how Fig.~\ref{fig:sf-typ} samples it.} on the unit sphere of
+$\mathcal H_R$), $\rho_S$ is indistinguishable from \eqref{eq:psw-can}:
+\begin{equation}\label{eq:psw-bound}
+\big\langle\,\lVert\rho_S-\varrho_S\rVert_1\,\big\rangle_{\phi}
+ \;\le\; \sqrt{\frac{d_S}{d_E^{\mathrm{eff}}}},
+\qquad
+d_E^{\mathrm{eff}}\equiv\frac{1}{\operatorname{Tr}(\varrho_E^{2})},\quad
+\varrho_E=\operatorname{Tr}_S\rho_{\mathrm{mc}},
+\end{equation}
+Two of the objects deserve unpacking before we use them. The \emph{trace norm}
+$\lVert A\rVert_1=\operatorname{Tr}\sqrt{A^{\dagger}A}$ is the sum of the
+singular values---for two states diagonal in a common basis, simply the
+$\ell^{1}$ distance between the diagonals---and it is the operationally correct
+metric: the best single measurement distinguishes states $\rho$ and $\sigma$
+with success probability $\tfrac12+\tfrac14\lVert\rho-\sigma\rVert_1$, so
+trace-norm-close means \emph{physically} indistinguishable. And
+$d_E^{\mathrm{eff}}$, the inverse purity of the environment's reduced
+microcanonical state, is its \emph{participation number}---how many environment
+states are effectively occupied ($d_E^{\mathrm{eff}}=d_E$ exactly when all are
+weighted equally). By L\'evy's lemma\footnote{For a $\lambda$-Lipschitz function
+$f$ on the unit sphere in real dimension $2d_R$,
+$\Pr\{|f-\langle f\rangle|\ge\epsilon\}\le 2\exp(-c\,d_R\,\epsilon^{2}/\lambda^{2})$
+with $c$ an absolute constant: in high dimension, any smooth function of a
+random point is nearly constant. Applied to
+$f(\phi)=\lVert\rho_S-\varrho_S\rVert_1$ it upgrades the \emph{mean} bound
+\eqref{eq:psw-bound} to an exponential tail.} (concentration of measure on the
+high-dimensional sphere), the fraction of states violating
+\eqref{eq:psw-bound} by any fixed margin is
+exponentially small in $d_R$ (nonempty but exponentially rare---the exceptional
+states, and the SHO's starkest one, are pinned down in
+Remark~\ref{rem:atypical}). The equal-\emph{a priori} postulate is thereby
+\emph{demoted to a theorem}: one need not assume a flat distribution over
+microstates---almost every individual pure state already \emph{looks} flat to a
+small subsystem, because that is what generic entanglement across a large
+bipartition does. The weights $p_i$ become eigenvalues of a reduced density
+matrix (an objective property of one state), not a subjective ensemble.
+
+\paragraph{The $n$-oscillator realisation.} Make
+$\mathcal H_S,\mathcal H_E,\mathcal H_R$ concrete with the harmonic oscillator,
+the one closed system where the counting is elementary. Take $n$ identical
+oscillators
+\begin{equation}\label{eq:sho-H}
+\hat H=\hbar\omega\sum_{i=1}^{n}\hat n_i\qquad(\text{zero-point dropped}),
+\end{equation}
+equivalently one particle in an isotropic $n$-dimensional harmonic trap. Let $S$
+be oscillator~$1$ and $E$ the remaining $n-1$; the global constraint is a fixed
+total number of quanta $M=\sum_i k_i$, i.e.\ total energy
+$E_{\mathrm{tot}}=\hbar\omega M$. The shell
+$\mathcal H_R=\mathrm{span}\{\,|k_1,\dots,k_n\rangle:\sum_i k_i=M\,\}$ has the
+stars-and-bars\footnote{Distribute $M$ indistinguishable quanta over $n$
+oscillators: write $M$ stars and $n-1$ separating bars in a row; every
+arrangement is exactly one occupation pattern
+$(k_1,\dots,k_n)$, and there are $\binom{M+n-1}{n-1}$ arrangements.} dimension
+\begin{equation}\label{eq:sho-dR}
+d_R=\Omega(M,n)=\binom{M+n-1}{\,n-1\,},
+\end{equation}
+the microcanonical count for this system. A generic normalised state in it is
+$|\phi\rangle=\sum_{\sum k_i=M}c_{k_1\cdots k_n}\,|k_1,\dots,k_n\rangle$ with
+Haar-random coefficients.
+
+\emph{The reduced density matrix is automatically diagonal.} Writing an
+environment configuration as $\vec K=(k_2,\dots,k_n)$ with
+$|\vec K|\equiv\sum_{i\ge2}k_i$, the constraint forces $k_1=M-|\vec K|$ for
+\emph{every} term, so each $\vec K$ pairs with a single system level. Hence
+\begin{equation}\label{eq:sho-rhoS}
+\rho_S=\operatorname{Tr}_E|\phi\rangle\langle\phi|
+      =\sum_{k=0}^{M}\Big(\,\underbrace{\textstyle\sum_{|\vec K|=M-k}
+        |c_{k,\vec K}|^{2}}_{\displaystyle \rho_S(k)}\Big)\,|k\rangle\langle k|,
+\end{equation}
+with \emph{no} off-diagonal entries: two different system energies would need
+the same environment state to carry two different energies, which the global
+conservation law forbids. This is dephasing by a conservation law made
+concrete---the microscopic reason $\rho_S$ is a classical distribution over
+energy levels rather than a coherent superposition, so that the $\{p_i\}$ of
+\eqref{eq:boltzdist} are literally its diagonal.
+
+\emph{Its average is the canonical state.} For a Haar-random unit vector in
+$d_R$ complex dimensions $\langle|c_{k,\vec K}|^{2}\rangle=1/d_R$, and the number
+of environment configurations with $|\vec K|=M-k$ is $\Omega(M-k,\,n-1)$, so
+\begin{equation}\label{eq:sho-avg}
+\big\langle\rho_S(k)\big\rangle
+ =\frac{\Omega(M-k,\,n-1)}{d_R}
+ =\frac{\dbinom{M-k+n-2}{\,n-2\,}}{\dbinom{M+n-1}{\,n-1\,}}
+ \;\equiv\;\varrho_S(k),
+\end{equation}
+which is exactly \eqref{eq:psw-can} written out---the marginal of the
+microcanonical shell onto one oscillator.
+
+\emph{And a single state hugs that average.} The diagonal entry $\rho_S(k)$ is a
+sum of $N_k=\Omega(M-k,n-1)$ terms $|c|^{2}$, each $\sim1/d_R$; for a random unit
+vector its relative fluctuation is $1/\sqrt{N_k}$, exponentially small in $n$.
+The PSW bound \eqref{eq:psw-bound} makes this sharp. Here the reduced
+microcanonical environment state $\varrho_E$ is uniform over the $d_R$
+environment configurations with $|\vec K|\le M$ (hockey-stick identity
+$\sum_{j=0}^{M}\Omega(j,n-1)=d_R$), so $\operatorname{Tr}(\varrho_E^{2})=1/d_R$
+and $d_E^{\mathrm{eff}}=d_R$. With $d_S=M+1$ accessible levels,
+\begin{equation}\label{eq:sho-bound}
+\big\langle\lVert\rho_S-\varrho_S\rVert_1\big\rangle
+ \le\sqrt{\frac{M+1}{\dbinom{M+n-1}{\,n-1\,}}}
+ \;\approx\;\sqrt{\mu n}\;e^{-n\sigma(\mu)/2},
+\qquad
+\sigma(\mu)=(1{+}\mu)\ln(1{+}\mu)-\mu\ln\mu,
+\end{equation}
+where $\mu=M/n$ is the mean occupancy and $\sigma(\mu)$ is---not
+coincidentally---the canonical entropy per oscillator in units of $k_B$. The
+exponent is $n$ times a thermodynamic entropy: the measure of atypical states is
+$e^{-S/k_B}$. Numbers make the point brutal. For a modest bath of $n=100$
+oscillators at $\mu=1$ ($\beta\hbar\omega=\ln2$),
+$d_R=\binom{199}{99}\approx4.5\times10^{58}$ and the bound is below $10^{-28}$: a
+\emph{single} random pure state of one hundred oscillators already presents
+oscillator~$1$ with a density matrix that is thermal to twenty-eight decimal
+places---no reservoir, no ensemble, no postulate, only the geometry of a
+high-dimensional sphere.
+Figure~\ref{fig:sf-typ} shows the collapse directly: the exact distribution of
+$\lVert\rho_S-\varrho_S\rVert_1$ over Haar-random shell states (whose diagonal
+is Dirichlet-distributed with parameters $N_0,\dots,N_M$, which is how the
+figure samples it exactly) hugs the PSW bound and falls exponentially in $n$.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=.62\linewidth]{figures/fig_sf_typicality}
+\caption{Canonical typicality, verified by exact sampling. For Haar-random
+states of the $n$-oscillator shell at $\mu=1$, the trace distance
+$\lVert\rho_S-\varrho_S\rVert_1$ (mean and 5--95\% band over $400$ draws)
+tracks the PSW bound $\sqrt{d_S/d_E^{\mathrm{eff}}}$ of \eqref{eq:psw-bound}
+and decays exponentially in $n$---the slope is the entropy $\sigma(\mu)/2$ per
+oscillator of \eqref{eq:sho-bound}. The dotted line is the atypical product
+Fock state $|M,0,\dots,0\rangle$ of Remark~\ref{rem:atypical}, pinned at the
+maximal distance $2(1-1/d_R)$: the exceptional set exists but does not move.}
+\label{fig:sf-typ}
+\end{figure}
+
+\begin{remark}[where canonical typicality fails]\label{rem:atypical}
+The bound \eqref{eq:psw-bound}/\eqref{eq:sho-bound} governs the \emph{typical}
+state; its exceptional set is nonempty, and the oscillator names it. Typicality
+fails precisely for the states with little $S{:}E$ entanglement: a product
+$|\psi_S\rangle\otimes|\psi_E\rangle$ has $\rho_S=|\psi_S\rangle\langle\psi_S|$
+pure, as far from thermal as a state can be. The extreme case is a single shell
+Fock vector with every quantum in the system,
+\begin{equation}\label{eq:atypical}
+|\phi\rangle=|M,0,\dots,0\rangle,\qquad
+\rho_S=|M\rangle\langle M|,\qquad
+\tfrac12\lVert\rho_S-\varrho_S\rVert_1=1-P(M)=1-\tfrac1{d_R},
+\end{equation}
+using $P(M)=\Omega(0,n-1)/d_R=1/d_R$. The trace distance is $\approx1$, the
+largest two density matrices can have, whereas the typical value
+\eqref{eq:sho-bound} is $\sim10^{-28}$---this lone state overshoots the bound by
+some twenty-eight orders of magnitude. Yet it costs the theorem nothing: such
+product states form a submanifold far below the sphere's $2d_R-1$ real
+dimensions and are met with probability $\sim e^{-cn}$. They are exactly the
+definite-per-oscillator-occupation states---the natural stationary states of the
+\emph{integrable} oscillator---so this kinematic exception is the shadow of the
+dynamical non-thermalisation in the cautionary tale below, and the reason a
+chaotic (ETH-obeying) $\hat H$, whose eigenstates are \emph{themselves} typical,
+has no such exceptions.
+\end{remark}
+
+\paragraph{Recovering the Boltzmann weight, and meeting \S\ref{ssec:boltzdist}.}
+It remains to identify $\varrho_S$ with the Gibbs state. This is the
+\emph{equivalence of ensembles}, and for the oscillator it is one line: the
+consecutive ratio of \eqref{eq:sho-avg} is
+\begin{equation}\label{eq:sho-ratio}
+\frac{\varrho_S(k{+}1)}{\varrho_S(k)}=\frac{M-k}{\,M-k+n-2\,}
+\xrightarrow[\;M=\mu n\;]{n\to\infty}\frac{\mu}{\mu+1}\equiv x,
+\end{equation}
+so $\varrho_S(k)\to(1-x)\,x^{k}$, a geometric (Planck) distribution
+(Fig.~\ref{fig:sf-qmarg})---precisely
+$e^{-\beta\hbar\omega\,k}/Z_S$ with $Z_S=(1-x)^{-1}$ and $x=e^{-\beta\hbar\omega}$.
+The temperature is not an input: differentiating \eqref{eq:sho-dR} gives
+$\beta=\partial\ln\Omega/\partial E=(\hbar\omega)^{-1}\ln\frac{M+n}{M}
+=-(\hbar\omega)^{-1}\ln x$, i.e.\ the very
+$\beta=\partial\ln\Omega_{\mathrm{res}}/\partial E$ of
+\eqref{eq:expand}--\eqref{eq:beta}, now read off the closed system's own
+microcanonical dial, and giving $\langle k\rangle=\mu=(e^{\beta\hbar\omega}-1)^{-1}$,
+the Bose occupancy. The two logically distinct steps deserve separating:
+\eqref{eq:psw-bound}/\eqref{eq:sho-bound} (typicality, $\rho_S\to\varrho_S$) is
+the genuinely new, kinematic content that retires postulate~(i);
+\eqref{eq:sho-ratio} ($\varrho_S\to$ Gibbs) is the old large-bath argument---and
+it \emph{is} the Taylor truncation of \S\ref{ssec:boltzdist}, since
+$\ln\Omega(M{-}k,n{-}1)=(n{-}2)\ln(M{-}k)+\mathrm{const}$ expands to
+$-\beta\hbar\omega\,k$ with a dropped quadratic term smaller by $O(1/n)$. The
+oscillator lets one \emph{watch} both the postulate and the truncation of
+\eqref{eq:expand} become controlled, exact statements.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=.62\linewidth]{figures/fig_sf_quantum_marginal}
+\caption{Equivalence of ensembles at finite $n$: the exact shell marginal
+$\varrho_S(k)$ of \eqref{eq:sho-avg} at $\mu=1$ against its $n\to\infty$
+geometric (Planck) limit \eqref{eq:sho-ratio}. The finite-$n$ curves bend below
+the limit in the tail---that curvature is precisely the $O(1/n)$ quadratic term
+dropped in the Taylor truncation \eqref{eq:expand}, and the support ends at
+$k=M$ because a finite bath cannot absorb more than every quantum. By $n=64$
+the first decade is indistinguishable from Planck.}
+\label{fig:sf-qmarg}
+\end{figure}
+
+\paragraph{Why the oscillator is also the cautionary tale.} Typicality is purely
+\emph{kinematic}: \eqref{eq:sho-bound} counts states and never used the dynamics.
+It guarantees thermal reductions are overwhelmingly abundant on the shell, but
+not that an \emph{arbitrary} initial state \emph{evolves into} them---that is the
+ergodicity question, and the bare oscillator fails it, instructively, for two
+structural reasons. First, within one shell every basis state has the same
+energy $\hbar\omega M$, so $e^{-i\hat Ht/\hbar}$ acts as a single global phase
+and $\rho_S(t)=\rho_S(0)$ is frozen: the deliberately atypical start of
+Remark~\ref{rem:atypical} (all $M$ quanta in oscillator~$1$,
+$\rho_S=|M\rangle\langle M|$ pure) stays non-thermal forever. Second, across shells the spectrum is exactly equally spaced, so the
+whole system revives exactly every $2\pi/\omega$---there is no dephasing to carry
+an out-of-equilibrium state toward the typical set. Equivalently, the eigenstates
+are product Fock states $|k_1,\dots,k_n\rangle$, and a single one reduces to a
+\emph{pure} $|k_1\rangle$, the opposite of thermal: the harmonic oscillator flatly
+violates the eigenstate-thermalisation property a chaotic $\hat H$ would enjoy.
+The cure is the one that also makes the spectrum generic---a weak
+\emph{anharmonic} term $\tfrac{\alpha}{3}\sum_i(x_{i+1}-x_i)^{3}$ in the
+potential (the Fermi--Pasta--Ulam--Tsingou perturbation; note a \emph{bilinear}
+coupling $\sum_i x_ix_{i+1}$ would not do---being quadratic it merely rotates to
+new normal modes and is exactly as integrable as before) lifts the degeneracy
+and the commensurability, entangles the
+eigenstates, and restores both relaxation and eigenstate thermality, at the cost
+of the closed-form counting above. Figure~\ref{fig:sf-fput} shows both fates
+side by side---and adds the historical sting: the weakly anharmonic chain
+\emph{shares} its energy yet very nearly \emph{returns} it, the celebrated FPUT
+recurrence, so even where ergodicity is restored the approach to equipartition
+has long, model-dependent timescales. The division of labour is exactly the one
+worth recording: \emph{typicality} (a theorem, and all the parcel's equilibrium
+thermodynamics needs) makes equilibrium states almost all of the shell, while
+\emph{ergodicity} (a dynamical hypothesis the integrable oscillator lacks) is the
+stronger, separate input needed to \emph{reach} them in time.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\linewidth]{figures/fig_sf_fput}
+\caption{Ergodicity and its failure, integrated numerically for a $32$-mass
+chain started with all its energy in normal mode $1$. (a)~The harmonic chain:
+every mode energy is a constant of motion, so the atypical initial state of
+Remark~\ref{rem:atypical} persists forever---the integrable freeze. (b)~The same
+chain with the weak cubic FPUT nonlinearity ($\alpha=1/4$): energy now flows
+through modes $2$--$4$, but instead of settling at equipartition it drains
+almost entirely back into mode~$1$ near $t\approx155$ mode-$1$ periods and
+again near $t\approx310$---the near-recurrences of the original 1955
+experiment. Mixing is restored; the \emph{timescale} to true equipartition
+remains long and model-dependent.}
+\label{fig:sf-fput}
+\end{figure}
+
+\medskip\noindent
+None of this changes a line of \texttt{entropy\_S}: the $\beta=1/k_BT$ and the
+Boltzmann weights are identical to \S\ref{ssec:boltzdist}. What changes is their
+standing---no external reservoir, no imposed postulate, one closed Hamiltonian
+system read through a single theorem. This is the same closed-system stance that
+\S\ref{sec:conservation} takes for the \emph{conservation} of $s$ on the ascent;
+\S\ref{ssec:micro} there and this subsection are its two faces---why the weights
+are canonical, and why they stay frozen---each dispensing with the reservoir in
+favour of one Hamiltonian.
+
+\subsection{The flat prior as a gauge choice: how little postulate (i) does}
+\label{ssec:priorclass}
+
+Typicality attacked postulate~(i) by discarding the ensemble. This subsection
+attacks it from within ensemble language, and the conclusion is that the
+postulate is drastically overstated: what the physics actually requires of the
+prior is far weaker than flatness, and the flat choice is best understood as a
+\emph{gauge fixing}---one convenient representative of an equivalence class of
+priors that are pairwise indistinguishable by any measurement in play.
+
+\paragraph{The invariant.} Strike postulate~(i) and put \emph{arbitrary}
+weights $w_i>0$ on the shell microstates, $p_i=w_i/\sum_j w_j$. Rerunning the
+marginalisation of \S\ref{ssec:boltzdist} for the energy $\varepsilon$ of a
+small subsystem generalises \eqref{eq:pprop} by one factor:
+\begin{equation}\label{eq:priorclass}
+p(\varepsilon)\;\propto\;\bar w(\varepsilon)\,
+\Omega_S(\varepsilon)\,\Omega_B(E_{\mathrm{tot}}-\varepsilon),
+\qquad
+\bar w(\varepsilon)\equiv
+\text{mean of }w_i\text{ over the bath states at that }\varepsilon
+\end{equation}
+(with $w\equiv1$ this is \eqref{eq:submarginal} of \S\ref{ssec:bridge}, where
+its Boltzmann limit is taken). The Boltzmann factor comes from
+$\ln\Omega_B$ falling at rate $\beta$ per unit $\varepsilon$; the prior can
+disturb it only through $\bar w$. So the \emph{entire} operational content of
+postulate~(i) is the inequality
+\begin{equation}\label{eq:priorcrit}
+\boxed{\;\Big|\frac{\dd\ln\bar w}{\dd\varepsilon}\Big|\;\ll\;\beta
+=\frac{\dd\ln\Omega_B}{\dd\varepsilon}\;}
+\end{equation}
+---the \emph{coarse-grained} prior's tilt must be subdominant to the bath's
+clamping slope. Flatness is sufficient, memorable, and far stronger than
+necessary.
+
+\paragraph{Wilder than expected: magnitude is free if uncorrelated.} Notice
+what \eqref{eq:priorcrit} does \emph{not} constrain: the individual $w_i$.
+Each $\bar w(\varepsilon)$ averages over $\Omega_B=e^{S_B/k_B}$ bath states,
+so for weights fluctuating independently of $\varepsilon$ (any distribution
+with finite variance), concentration gives
+$\bar w(\varepsilon)=\langle w\rangle\big(1+O(e^{-S_B/2k_B})\big)$ for every
+$\varepsilon$ at once: even \emph{extensive} log-spread among the individual
+weights leaves the marginal Boltzmann to exponential accuracy, provided the
+wildness does not know about $\varepsilon$. And \S\ref{ssec:typicality} has
+already demonstrated exactly this without saying so: a Haar-random state
+assigns weights $|c_i|^2$ that are i.i.d.\ exponential variables---relative
+fluctuation $100\%$ per state, largest-to-smallest ratio of order
+$d_R\ln d_R$, i.e.\ log-spread of order $S/k_B$, about as far from flat as a
+prior can be---and Fig.~\ref{fig:sf-typ} shows the resulting $\rho_S$ thermal
+to $10^{-28}$. \emph{Canonical typicality is prior-robustness, quantified}:
+the theorem does not protect the flat prior; it proves the flat prior was
+never load-bearing.
+
+\paragraph{The four tiers.} The oscillator sorts every prior into a hierarchy,
+one line each:
+\begin{enumerate}
+\item \textbf{Tilt conjugate to the conserved total}, $w_i=e^{-\lambda M}$:
+constant on the shell (where $M$ is fixed), hence \emph{exactly} invisible---a
+pure gauge transformation. (Pleasingly, this is why $\beta$ itself is physical
+only \emph{across} shells.)
+\item \textbf{Generic randomness of any magnitude}, $w_i$ i.i.d.: washed out
+at $O(e^{-S_B/2k_B})$ by bath averaging, as above (Fig.~\ref{fig:sf-typ}).
+Gauge in practice.
+\item \textbf{Smooth coarse tilt obeying \eqref{eq:priorcrit}}: shifts the
+saddle of \S\ref{ssec:bridge} at subleading order; all thermodynamics
+unchanged in the limit.
+\item \textbf{Tilt conjugate to a subsystem observable},
+$w_i=e^{-\lambda k_1}$: the marginal ratio \eqref{eq:sho-ratio} acquires a
+factor $e^{-\lambda}$, i.e.\ $x\to xe^{-\lambda}$---oscillator~$1$ sits at a
+\emph{different temperature}, $\beta_1\hbar\omega=\beta\hbar\omega+\lambda$.
+Visible for any $\lambda\sim O(1)$, because it competes with the clamping
+\emph{slope}, not the clamping \emph{range}. This is the genuinely wrong
+prior, and the atypical Fock state of Remark~\ref{rem:atypical} is its
+$\lambda\to-\infty$ extreme: all weight on a single conspirator.
+\end{enumerate}
+The restated postulate is then honest and minimal: \emph{the prior must carry
+no tilt conjugate to an observable in play, beyond one negligible against
+$\beta$; everything else about it is unmeasurable.}
+
+\paragraph{Whole-system quantities, dynamics, and Jaynes.} For global
+thermodynamics the criterion is cruder still: any prior whose log-weights
+have subextensive spread has Shannon entropy $\ln\Omega+o(N)$, so $S$,
+$T=\partial S/\partial E$, and everything intensive are unchanged per particle
+---in large-deviation language, a prior with zero rate function cannot move a
+rate function, which is why ensemble equivalence never noticed the choice.
+Dynamics then explains which representative we write down: the flat
+(microcanonical) measure is the unique stationary one absolutely continuous
+with respect to Liouville measure for ergodic dynamics---the fixed point of
+the class---while the eigenstate-thermalisation property of
+\S\ref{ssec:typicality} is the statement that chaotic evolution manufactures
+tier-2 genericity out of almost any initial weighting.
+Jaynes' maximum-entropy reading lands as a deliberate anti-climax: choose the
+flat prior not because nature is flat but because, within the class, it is the
+representative that adds no spurious information---and the class structure is
+precisely why the choice was never falsifiable. With the postulate audited
+from both ends, we can run the canonical machinery with a clear conscience.
+
+\subsection{From \texorpdfstring{$Z$}{Z} to entropy, and indistinguishable particles}
+\label{ssec:Z}
+
+Everything thermodynamic now follows from $Z$. Insert \eqref{eq:boltzdist} into
+the Gibbs entropy \eqref{eq:gibbs}, using $\ln p_i=-\beta E_i-\ln Z$:
+\begin{equation}\label{eq:Sderiv}
+S=-k_B\sum_i p_i\big(-\beta E_i-\ln Z\big)
+ =k_B\beta\sum_i p_iE_i+k_B\ln Z
+ =\frac{\langle E\rangle}{T}+k_B\ln Z ,
+\end{equation}
+where $\langle E\rangle=\sum_i p_iE_i=-\partial\ln Z/\partial\beta$ is the mean
+total energy (the thermodynamic internal energy). Defining the Helmholtz free
+energy $F\equiv-k_BT\ln Z$, equation \eqref{eq:Sderiv} is
+\begin{equation}\label{eq:SfromF}
+S=\frac{\langle E\rangle-F}{T}
+ =-\Big(\frac{\partial F}{\partial T}\Big)_{V,N},
+\end{equation}
+the last equality being the standard thermodynamic identity (both $V$ and $N$,
+the other natural variables of $F$, are held fixed). So the whole task reduces
+to computing $Z$ for the parcel's constituents and differentiating.
+
+\begin{remark}[what depends on what]\label{rem:args}
+It is worth being explicit about arguments, as the distinction drives the
+conservation argument later. The microstate energies $E_i$ are \emph{mechanical}:
+each is set by the Hamiltonian at a fixed volume and particle number, so
+$E_i=E_i(V,N)$---a function of the microstate label $i$ and of $(V,N)$, but
+\emph{not} of temperature. Consequently the partition function and free energy
+carry the mechanical parameters as well, $Z=Z(\beta,V,N)$ and $F=F(T,V,N)$
+---which is why $(V,N)$ sit in the derivative subscript of \eqref{eq:SfromF}
+---while the \emph{mean} energy $\langle E\rangle=\sum_i p_iE_i=U(T,V,N)$ is a
+thermodynamic function of state, belonging to the whole ensemble and to no
+single microstate.
+
+A caution on the occupations, since it is easy to over-simplify: $p_i=e^{-\beta
+E_i}/Z$ is \emph{not} a function of temperature alone. It depends on $(T,V,N)$
+jointly---on $T$ through $\beta$ and on $(V,N)$ through $E_i$---so what fixing
+the macrostate determines is the \emph{whole} distribution $\{p_i\}$, with no
+residual freedom. This is exactly the structure the reversible-adiabatic
+argument of \S\ref{sec:conservation} turns on. Under a slow (quasi-static)
+change of $V$ the levels $E_i(V)$ shift, yet along an adiabat the product
+$\beta E_i$ is held fixed for \emph{every} $i$ simultaneously---for a monatomic
+ideal gas $E_i\propto V^{-2/3}$ and the adiabat is $TV^{2/3}=\mathrm{const}$,
+so $\beta E_i\propto T^{-1}V^{-2/3}=\mathrm{const}$---and therefore each
+occupation $p_i$, and with it $S=-k_B\sum_i p_i\ln p_i$, is unchanged even as
+both $T$ and the $E_i$ move. ``The levels shift; the occupations are frozen'' is
+this statement, and it is what makes the ascent isentropic.
+\end{remark}
+
+One structural fact makes $Z$ tractable. For $N$ \emph{non-interacting}
+particles the total energy is a sum of single-particle energies,
+$E_i=\sum_{a=1}^{N}\varepsilon_{a}$, so the system sum factorises into a product
+of identical single-particle sums, $z^{N}$. But the particles are
+\emph{indistinguishable}: permuting them yields the same physical microstate, so
+$z^{N}$ overcounts by the $N!$ permutations. The corrected result---which
+resolves the Gibbs mixing paradox and is the classical limit of quantum
+statistics---is
+\begin{equation}\label{eq:ZN}
+Z=\frac{z^{N}}{N!},\qquad
+z=\sum_{\text{single-particle states}}e^{-\beta\varepsilon},
+\end{equation}
+with $z$ the single-particle partition function and $\varepsilon$ a
+single-particle energy (contrast $E_i$, the whole-system energy of
+\S\ref{ssec:BG}). Everything now hinges on $z$.
+
+\subsection{The translational partition function and the thermal de~Broglie wavelength}
+\label{ssec:lambda}
+
+For a structureless particle in a box of volume $V$ the energy is purely
+kinetic, $\varepsilon=\mathbf p^{2}/2m$. In the classical (dilute,
+non-degenerate) regime the sum over single-particle states becomes a
+phase-space integral with one state per volume $h^{3}$ of phase space:
+\begin{equation}\label{eq:ztrans1}
+z_{\mathrm{tr}}=\frac{1}{h^{3}}\int_V\!\dd^{3}r\int_{\mathbb R^3}\!\dd^{3}p\;
+e^{-\beta \mathbf p^{2}/2m}
+=\frac{V}{h^{3}}\prod_{i=x,y,z}\int_{-\infty}^{\infty}\!\dd p_i\,
+e^{-\beta p_i^{2}/2m}.
+\end{equation}
+Each of the three Gaussian integrals evaluates to
+$\int_{-\infty}^{\infty}e^{-\beta p^{2}/2m}\dd p=\sqrt{2\pi m/\beta}
+=\sqrt{2\pi m k_BT}$, so
+\begin{equation}\label{eq:ztrans2}
+z_{\mathrm{tr}}=\frac{V\,(2\pi m k_BT)^{3/2}}{h^{3}}\equiv\frac{V}{\Lambda^{3}},
+\qquad
+\boxed{\;\Lambda\equiv\frac{h}{\sqrt{2\pi m k_BT}}\;}
+\end{equation}
+The length $\Lambda$ is the \emph{thermal de~Broglie wavelength}: the quantum
+coherence scale of a particle with thermal momentum
+$\sim\!\sqrt{m k_BT}$. It carries the entire temperature dependence of
+$z_{\mathrm{tr}}$, as $\Lambda^{3}\propto T^{-3/2}$. The classical treatment
+\eqref{eq:ZN}--\eqref{eq:ztrans1} is valid precisely when $n\Lambda^{3}\ll1$
+(mean spacing $\gg$ coherence length); for air at surface conditions
+$n\Lambda^{3}\sim10^{-6}$, so the approximation is excellent.
+
+\subsection{Free energy and the Sackur--Tetrode entropy}\label{ssec:sackur}
+
+Take a monatomic gas first, $z=z_{\mathrm{tr}}=V/\Lambda^{3}$ (no internal
+structure). From \eqref{eq:ZN}, $\ln Z_N=N\ln z-\ln N!$, and with Stirling's
+approximation $\ln N!\simeq N\ln N-N$,
+\begin{equation}\label{eq:Fmon}
+F=-k_BT\ln Z_N
+=-N k_BT\Big[\ln\frac{z}{N}+1\Big]
+=-N k_BT\Big[\ln\frac{V}{N\Lambda^{3}}+1\Big].
+\end{equation}
+The entropy follows from \eqref{eq:SfromF}. Writing
+$\ln(V/N\Lambda^{3})=\ln(V/N)+\tfrac32\ln T+C_0$ with
+$C_0=\tfrac32\ln(2\pi m k_B/h^{2})$ temperature-independent, only the
+$\tfrac32\ln T$ piece and the explicit prefactor $T$ depend on temperature:
+\begin{align}
+S=-\frac{\partial F}{\partial T}
+&=N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+1\Big]
+ +N k_BT\cdot\frac{3}{2T} \notag\\
+&=N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+\underbrace{1}_{\text{from }F}
+      +\underbrace{\tfrac32}_{\partial_T(\tfrac32 T\ln T)}\Big]
+ =N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+\frac{5}{2}\Big].
+\label{eq:sackur}
+\end{align}
+This is the \emph{Sackur--Tetrode} equation. Its additive $\tfrac52$ has a
+definite provenance: $1$ from the indistinguishability remainder (the $+1$ in
+$F$, i.e.\ the $-\ln N!$ Stirling term) and $\tfrac32$ from differentiating the
+thermal energy $\tfrac32 N k_BT$. Physically the two variable terms are the
+split we will track to the end: $\ln(V/N)$ is \emph{configurational} (positional
+microstates---more room per particle, more states), and
+$-3\ln\Lambda=\tfrac32\ln T+\mathrm{const}$ is \emph{thermal} (the momentum
+distribution broadens with $T$).
+
+\subsection{Intensive form, and the fate of the two \texorpdfstring{$5/2$}{5/2}'s}
+\label{ssec:intensive}
+
+Reduce \eqref{eq:sackur} to a specific entropy. Per particle, in units of
+$k_B$,
+\begin{equation}\label{eq:sperparticle}
+\tilde s\equiv\frac{S}{N k_B}=\ln\frac{V}{N\Lambda^{3}}+\frac52 .
+\end{equation}
+Use the ideal-gas law in the form $V/N=k_BT/p$ and
+$\Lambda^{-3}=(2\pi m k_B/h^{2})^{3/2}T^{3/2}$:
+\begin{align}
+\ln\frac{V}{N\Lambda^{3}}
+&=\ln\frac{k_BT}{p}+\frac32\ln T+C_0
+ =\underbrace{\ln T}_{\text{from }V/N}\;-\;\ln p\;+\;
+   \underbrace{\tfrac32\ln T}_{\text{from }\Lambda^{-3}}\;+\;C_1 \notag\\
+&=\frac52\ln T-\ln p+C_1 ,\qquad C_1=\ln k_B+C_0 .
+\label{eq:lnVNL}
+\end{align}
+Substituting into \eqref{eq:sperparticle},
+\begin{equation}\label{eq:monatomic}
+\tilde s=\frac52\ln T-\ln p+\Big(C_1+\frac52\Big)
+        =\underbrace{\frac52}_{=\,c_p/R}\ln T-\ln p+\mathrm{const}.
+\end{equation}
+There are \emph{two} factors of $5/2$ here and they behave oppositely---this is
+the crux:
+\begin{itemize}
+\item The \textbf{additive} $\tfrac52$ inherited from Sackur--Tetrode
+      \eqref{eq:sperparticle} is a pure constant. It is swallowed into the
+      reference constant in \eqref{eq:monatomic} and cancels in every entropy
+      \emph{difference}. So yes---it drops out of anything physical; it survives
+      only in the absolute, third-law-anchored entropy.
+\item The \textbf{coefficient} $\tfrac52$ multiplying $\ln T$ is not a constant
+      and does \emph{not} drop out. Equation~\eqref{eq:lnVNL} shows it is
+      assembled as $1+\tfrac32$: one power of $\ln T$ from the configurational
+      $\ln(V/N)=\ln(k_BT/p)$, and $\tfrac32$ from the thermal
+      $\Lambda^{-3}\!\propto T^{3/2}$. For a monatomic gas this equals $c_p/R$.
+\end{itemize}
+Multiplying \eqref{eq:monatomic} by the specific gas constant $R=k_B/m$ (mass
+$m$ per particle) turns $\tilde s$ into entropy per unit mass, and
+$\tfrac52 R=c_p$ for a monatomic gas, giving the building block
+\begin{equation}\label{eq:idealS}
+\boxed{\;s \;=\; c_p\ln T - R\ln p + \mathrm{const}.\;}
+\end{equation}
+
+\subsection{Beyond monatomic: internal degrees of freedom}\label{ssec:polyatomic}
+
+Sackur--Tetrode as derived assumes a structureless particle, so
+\eqref{eq:sackur} does \emph{not} apply verbatim to air ($\mathrm N_2,\mathrm
+O_2$) or water vapour ($\mathrm H_2\mathrm O$), which rotate and vibrate. Two
+things change, both controlled. First, the single-particle energy is a sum
+$\varepsilon=\varepsilon_{\mathrm{tr}}+\varepsilon_{\mathrm{int}}$
+(translation plus rotation, vibration, electronic), so the partition function
+\emph{factorises},
+\begin{equation}\label{eq:zfactor}
+z=z_{\mathrm{tr}}(T,V)\,z_{\mathrm{int}}(T),
+\end{equation}
+with the internal factor a function of $T$ alone (the internal level spacings do
+not depend on the box). Second, carrying $z_{\mathrm{int}}$ through
+\eqref{eq:Fmon}--\eqref{eq:sackur} adds an internal energy
+$u_{\mathrm{int}}=k_BT^{2}\,\dd\ln z_{\mathrm{int}}/\dd T$ per particle and a
+matching internal entropy; the extra heat capacity is
+$c_{v,\mathrm{int}}=\dd u_{\mathrm{int}}/\dd T$.
+
+The \textbf{equipartition theorem} makes this concrete: every quadratic degree
+of freedom that is thermally active contributes $\tfrac12 k_B$ to the
+per-particle heat capacity. Translation always gives $3\times\tfrac12$;
+rotation adds $2\times\tfrac12$ for a linear molecule ($\mathrm N_2,\mathrm
+O_2,\mathrm{CO}_2$) or $3\times\tfrac12$ for a nonlinear one ($\mathrm H_2\mathrm
+O$); each active vibrational mode counts twice (kinetic $+$ potential). Hence
+$c_v=\tfrac{f}{2}k_B$ over $f$ active quadratic freedoms, $c_p=c_v+k_B$, and the
+monatomic ratio $c_p/R=\tfrac52$ is replaced by $c_p/R=\tfrac{f}{2}+1$.
+
+Crucially, the \emph{functional form} of the entropy is unchanged. Whenever
+$c_p$ is constant---all active modes classical, none freezing in or out over the
+range of interest---integrating the thermodynamic identity
+$\dd s=c_p\,\dd T/T-R\,\dd p/p$ (derived independently from the first and second
+laws in \S\ref{sec:classical}) gives
+\begin{equation}\label{eq:idealSgen}
+s=c_p\ln T-R\ln p+\mathrm{const}
+\end{equation}
+for \emph{any} ideal gas, with the material $c_p$. Sackur--Tetrode is just the
+monatomic special case that additionally fixes the absolute constant. For the
+atmosphere ($\approx\!200$--$320\K$) the diatomic rotational modes are fully
+excited while the stiff vibrational modes are largely frozen, so $\cpd$ and
+$\cpv$ (Table~\ref{tab:const}) are very nearly temperature-independent and
+\eqref{eq:idealSgen} holds to high accuracy; the small residual $c_p(T)$
+variation is absorbed into the effective constants and, for water, into the
+$\cl$ tuning of Remark~\ref{rem:modcl}.
+
+\begin{remark}[what the additive constant hides, and why it does not matter]
+The reference constant in \eqref{eq:idealS}/\eqref{eq:idealSgen} absorbs
+$\Lambda$, the Sackur--Tetrode $\tfrac52$, the internal-mode ground states, and
+each species' zero of energy. Because the ascent conserves a \emph{difference}
+of entropies at fixed composition (\S\ref{sec:conservation}) and buoyancy
+depends on temperature \emph{differences} (\S\ref{sec:adiabat}), these constants
+never enter a physical prediction; the code is free to drop them, and does.
+\end{remark}
+
+\subsection{The bridge to \texorpdfstring{$S(E)$}{S(E)}: Laplace, Legendre, and
+why \texorpdfstring{$Z$}{Z} is the elegant object}\label{ssec:bridge}
+
+The canonical machinery has now done real work---$Z$, differentiated twice,
+produced Sackur--Tetrode and the whole family
+\eqref{eq:idealSgen}---so this is the right moment to step back and ask how it
+relates to the older, more geometric foundation: the microcanonical entropy
+$S(E)$, the logarithm of the phase-space volume at fixed
+energy. Making the link exact explains
+both why they agree and why the $Z$ side carried every derivation above so much
+more lightly than the reservoir bookkeeping of \S\ref{ssec:boltzdist} did.
+
+\paragraph{The transform.} Two objects must be kept apart. The \emph{density of
+states}
+\begin{equation}\label{eq:dos}
+\rho(E)=\operatorname{Tr}\,\delta(E-\hat H)=\sum_i\delta(E-E_i)
+\end{equation}
+of \S\ref{ssec:operator}---with $\delta(E-\hat H)=\sum_i\delta(E-E_i)\,
+|i\rangle\langle i|$ the operator function of $\hat H$ (evaluated on the spectrum
+and traced \emph{after}, exactly as $Z=\operatorname{Tr}e^{-\beta\hat H}
+=\sum_i e^{-\beta E_i}$)---is a distribution, a comb of one spike per level; its
+logarithm is meaningless. The Boltzmann entropy instead uses the dimensionless
+\emph{count}
+\begin{equation}\label{eq:dos-count}
+\Omega(E)=\int_E^{E+\Delta E}\!\rho(E')\,\dd E'\approx\bar\rho(E)\,\Delta E,
+\qquad S(E)=k_B\ln\Omega(E),
+\end{equation}
+the number of levels in a macroscopically thin shell $[E,E+\Delta E]$, with
+$\bar\rho$ the smoothed envelope of the comb. Because the spectrum is spaced like
+$e^{-N}$, any such shell holds astronomically many levels, so $\Omega$ is a huge
+\emph{smooth} number and $\ln\Omega$ is well defined and extensive; the window
+enters only through the subextensive $k_B\ln\Delta E$, negligible beside
+$S\sim k_BN$. ($\Omega$ and $\bar\rho$ thus agree \emph{inside} the logarithm but
+are not the same object---they differ by the units-carrying $\Delta E$, which is
+why $\rho$ and $\Omega$ get different symbols.) Figure~\ref{fig:sf-comb} draws
+all three objects at once for three oscillators. The partition function is the
+Laplace transform of the \emph{density} $\rho$,
+\begin{equation}\label{eq:bridge-laplace}
+Z(\beta)=\int_0^\infty\!\dd E\,\rho(E)\,e^{-\beta E}=\sum_i e^{-\beta E_i}
+        \approx\int_0^\infty\!\dd E\,\exp\!\Big[\tfrac{1}{k_B}S(E)-\beta E\Big],
+\end{equation}
+and the middle equality is the crux: the exponential kernel integrates straight
+over the comb, so $Z$ does \emph{for free} the coarse-graining that $S(E)$ needed
+a window for---the ``distribution\,$\to$\,analytic function'' elegance, met again
+below. It is invertible by the Bromwich integral
+$\rho(E)=\frac{1}{2\pi i}\int Z(\beta)\,e^{\beta E}\dd\beta$: $\rho$ and $Z$ carry
+identical information. The oscillator shows this concretely---and more cleanly
+still, since its spectrum is genuinely discrete, so the ``count'' is an honest
+integer degeneracy needing no window at all. The
+microcanonical count $\Omega(M,n)=\binom{M+n-1}{n-1}$ of \eqref{eq:sho-dR} is a
+genuine combinatorial sequence, but it is packaged whole by
+\begin{equation}\label{eq:bridge-genfn}
+Z(x)=\sum_{M\ge0}\Omega(M,n)\,x^{M}
+     =\sum_{M\ge0}\binom{M+n-1}{n-1}x^{M}
+     =\frac{1}{(1-x)^{n}},\qquad x=e^{-\beta\hbar\omega},
+\end{equation}
+so $Z$ is nothing but the \emph{generating function} whose Taylor coefficients
+are the shell dimensions; a single $\Omega(M,n)$ comes back as the coefficient
+integral $\frac{1}{2\pi i}\oint Z(x)\,x^{-M-1}\dd x$, whose saddle point gives
+the entropy asymptotics. ``Laplace transform of the density of states'' and
+``generating function of the counts'' are one statement, continuous and discrete.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=.62\linewidth]{figures/fig_sf_comb}
+\caption{The two objects of \eqref{eq:dos}--\eqref{eq:dos-count}, drawn for
+$n=3$ oscillators. The density of states $\rho(E)$ is a comb of
+$\delta$-spikes, one per level, with integer weights
+$\Omega(M,3)=\binom{M+2}{2}$ (stems); the smoothed envelope $\bar\rho(E)$ is
+the dashed curve; and a window $\Delta E$ (shaded) converts the comb into the
+dimensionless count $\Omega(E)$---here $199$ states---whose logarithm is the
+Boltzmann entropy. The logarithm is taken of the count, never of the comb.}
+\label{fig:sf-comb}
+\end{figure}
+
+\paragraph{The thermodynamic limit is a Legendre transform.} For a macroscopic
+system the integrand of \eqref{eq:bridge-laplace} is sharply peaked, and
+Laplace's method evaluates it at the saddle $E^\ast(\beta)$ where the exponent is
+stationary,
+\begin{equation}\label{eq:bridge-saddle}
+\frac{\dd}{\dd E}\Big[\tfrac{1}{k_B}S(E)-\beta E\Big]_{E^\ast}=0
+\;\Longrightarrow\;
+\frac{\dd S}{\dd E}\Big|_{E^\ast}=k_B\beta=\frac1T,
+\end{equation}
+which is exactly the microcanonical definition of temperature.
+Back-substituting, $-k_BT\ln Z=E^\ast-T\,S(E^\ast)=F$: the free energy is the
+Legendre transform of $S(E)$, with $\beta$ and $E$ conjugate,
+\begin{equation}\label{eq:bridge-legendre}
+\ln Z(\beta)=\sup_E\Big[\tfrac{1}{k_B}S(E)-\beta E\Big],\qquad
+\tfrac{1}{k_B}S(E)=\inf_\beta\big[\ln Z(\beta)+\beta E\big],
+\end{equation}
+with duality relations $\beta=\tfrac1{k_B}S'(E)$ and $E=-\partial_\beta\ln Z$.
+So the Legendre transform relating the ensembles (the table of
+\S\ref{ssec:operator}) is just the $N\to\infty$ shadow of the exact Laplace
+transform \eqref{eq:bridge-laplace}: the saddle collapses the whole spectrum onto
+one energy $E^\ast$ and one temperature. (This is the thermodynamic face of the
+Cram\'er/large-deviation duality between the scaled cumulant generating function
+$\ln Z$ and its rate function $S/k_B$.)
+Figure~\ref{fig:sf-bridge} draws both statements exactly for the oscillator:
+the tangent construction on the exact $S(E)$, and the saddle sharpening as
+$1/\sqrt n$.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\linewidth]{figures/fig_sf_bridge}
+\caption{The bridge, drawn exactly for the oscillator. (a)~The entropy per
+oscillator $\sigma(\mu)$ of \eqref{eq:sho-bound} is concave; the tangent at
+$\mu^{*}=1$ has slope $\beta^{*}\hbar\omega=\ln2$ \eqref{eq:bridge-saddle} and
+intercept $-F/nk_BT=\ln2$: the Legendre transform \eqref{eq:bridge-legendre}
+\emph{is} this tangent-and-intercept geometry. (b)~The Laplace integrand
+$\rho(E)e^{-\beta E}$ of \eqref{eq:bridge-laplace} at $\beta=\beta^{*}$,
+normalised to its peak: the saddle at $E^{*}$ sharpens with relative width
+$1/\sqrt n$ \eqref{eq:relfluct}---the hard and soft constraints becoming
+operationally interchangeable.}
+\label{fig:sf-bridge}
+\end{figure}
+
+\paragraph{Why $Z$ is the elegant object.} Every awkward operation on $S(E)$ is
+an easy one on $Z$, because the Laplace transform converts them:
+\begin{itemize}
+\item \textbf{A distribution becomes an analytic function.}
+$\rho(E)=\operatorname{Tr}\delta(E-\hat H)$ is a comb of spectral spikes, and
+$S(E)$ needs a coarse-graining window to define at all; $Z(\beta)=\operatorname{Tr}
+e^{-\beta\hat H}$ is a smooth, entire function of $\beta$ for any spectrum bounded
+below---no delta functions, no window.
+\item \textbf{Convolution becomes multiplication---and the reservoir evaporates.}
+Independent systems ($\hat H=\hat H_1+\hat H_2$) \emph{convolve} their densities
+of states, $\rho=\rho_1\!*\rho_2$, but simply \emph{multiply} their
+partition functions, $Z=Z_1Z_2$, so $\ln Z$ is manifestly extensive. The whole
+``system\,$+$\,reservoir, expand $\ln\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)$''
+maneuver of \S\ref{ssec:boltzdist} was a convolution evaluated by saddle point;
+in the $Z$ picture one never introduces the reservoir---with the intensive
+$\beta$ as primary, the Boltzmann weight $e^{-\beta E_i}/Z$ is immediate. The
+reservoir's only job was to fix $\beta=S_{\mathrm{res}}'/k_B$, which $Z$ takes as
+its argument.
+\item \textbf{$\ln Z$ generates the cumulants.} $\langle E\rangle=-\partial_\beta
+\ln Z$ and $\operatorname{Var}(E)=\partial_\beta^{2}\ln Z=k_BT^{2}C_V\ge0$; every
+fluctuation is a derivative of one smooth function, and fluctuation--dissipation
+is one line. Energy fluctuations are not even representable on a single
+microcanonical $E$.
+\item \textbf{$Z$ is what one computes.} Path integrals, transfer matrices,
+perturbation theory, and Monte Carlo all act on $Z$ or $\ln Z$; counting states
+at fixed energy is the hard problem. The oscillator is the epitome:
+$\Omega(M,n)=\binom{M+n-1}{n-1}$ is a nontrivial count, while $Z=(1-x)^{-n}$ is
+one line \eqref{eq:bridge-genfn}.
+\end{itemize}
+
+\paragraph{When $S(E)$ is the truer object.} The elegance has a precise price:
+the Legendre transform \eqref{eq:bridge-legendre} can only return the
+\emph{concave hull} of $S(E)$, so wherever $S(E)$ is non-concave the $Z$ picture
+silently discards information---replacing the offending region by its Maxwell
+tangent (Fig.~\ref{fig:sf-nonconcave}). That is exactly what happens at
+first-order phase transitions (the flat
+tangent is the latent heat), and in long-range or self-gravitating systems, at
+negative temperatures, and in small systems---all cases of genuine \emph{ensemble
+inequivalence}, where the microcanonical $S(E)$ is faithful and the canonical
+average is not. So the honest ranking is the geometric one: $S(E)$ is primary and
+information-complete; $Z(\beta)$ is its Laplace transform---smoother, factorising,
+fluctuation-generating, and matched to how a system is actually held (at fixed
+$T$, not fixed $E$)---and the two are fully equivalent precisely when $S(E)$ is
+concave, i.e.\ short-range interactions as $N\to\infty$. That is the parcel's
+regime, and the reason the intensive $s(T,p)$---not a fixed-energy count---is the
+right variable for the solver.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=.62\linewidth]{figures/fig_sf_nonconcave}
+\caption{Where the elegance has a price (schematic). A non-concave $S(E)$
+carries a convex intruder (shaded); the Legendre transform
+\eqref{eq:bridge-legendre} can return only the concave hull (dashed), whose
+double tangent of slope $1/T_c$ replaces the intruder entirely. The canonical
+picture is blind to the shaded region---at $T_c$ it jumps across the interval
+$\Delta E$ (the latent heat) rather than passing through it. This is ensemble
+inequivalence: first-order transitions, long-range/self-gravitating systems,
+negative temperatures, small systems. In the parcel's regime (short-range,
+$N\to\infty$) $S(E)$ is concave and nothing is lost.}
+\label{fig:sf-nonconcave}
+\end{figure}
+
+\paragraph{Hard constraint, soft constraint, and the separation of scales.} The
+same transform settles what the microcanonical and canonical descriptions are to
+\emph{each other}, and answers a natural worry: the closed whole is governed by
+exact energy conservation, yet a small piece of it obeys the Boltzmann
+distribution at a fixed temperature---these feel as if they should be the same
+statement, and are not quite. Fixing the total energy exactly is a \emph{hard}
+constraint---a delta function $\delta(E_{\mathrm{tot}}-\hat H)$ projecting onto
+the energy shell, with \emph{zero} energy fluctuation. Fixing only the
+\emph{mean} energy through $\beta$ is a \emph{soft} constraint---the Boltzmann
+weight $e^{-\beta\hat H}$, with $\beta$ a Lagrange multiplier (the Jaynes reading
+of \S\ref{ssec:boltzdist}) and the energy free to fluctuate. They are genuinely
+different ensembles, yet locked together by an identity: the hard projector is an
+integral of soft weights over imaginary temperature,
+\begin{equation}\label{eq:delta-laplace}
+\delta(E_{\mathrm{tot}}-\hat H)
+=\frac{1}{2\pi i}\int_{c-i\infty}^{c+i\infty}\!\dd\beta\;
+   e^{\beta(E_{\mathrm{tot}}-\hat H)},
+\end{equation}
+which is just the inverse Bromwich transform of \eqref{eq:bridge-laplace} read as
+an operator identity---the sharp shell is a coherent superposition of Boltzmann
+weights at \emph{every} $\beta$. ``Hard'' and ``soft'' are one function and its
+Laplace transform, not two physical laws. What makes them \emph{equivalent} for a
+macroscopic system is a separation of scales, entering in two places.
+
+\emph{Whole-system equivalence, guarded by $1/\sqrt N$.} For large $N$ the
+$\beta$-integral \eqref{eq:delta-laplace}---equivalently the Laplace integral
+\eqref{eq:bridge-laplace}---is dominated by a single real saddle $\beta^\ast$
+where $S'(E_{\mathrm{tot}})=1/T$, so the sharp constraint collapses onto
+\emph{one} effective temperature. The width of that collapse is the energy
+fluctuation the soft constraint permits, which by the cumulant identity
+$\operatorname{Var}(E)=\partial_\beta^{2}\ln Z=k_BT^{2}C_V$ above and the
+extensivity $C_V,\langle E\rangle\sim N$ is
+\begin{equation}\label{eq:relfluct}
+\frac{\sqrt{\operatorname{Var}(E)}}{\langle E\rangle}
+=\frac{\sqrt{k_BT^{2}C_V}}{\langle E\rangle}\sim\frac{\sqrt N}{N}=\frac{1}{\sqrt N}.
+\end{equation}
+Energy fluctuations are $O(\sqrt N)$ absolutely but $O(1/\sqrt N)$ relatively: the
+soft constraint is \emph{effectively} as sharp as the hard one, and the two
+ensembles agree on every intensive quantity to that order.
+
+\emph{Subsystem equivalence, guarded by $N_S/N_B$.} The framing closest to the
+parcel is a small subsystem $S$ inside a hard-constrained whole $S+B$.
+Marginalising the shell over the bath gives the subsystem's energy distribution
+\begin{equation}\label{eq:submarginal}
+p(E_S)\;\propto\;\Omega_S(E_S)\,\Omega_B(E_{\mathrm{tot}}-E_S)
+        \;=\;\Omega_S(E_S)\,e^{S_B(E_{\mathrm{tot}}-E_S)/k_B},
+\end{equation}
+which is exactly $p_i\propto\Omega_{\mathrm{res}}(E_{\mathrm{tot}}-E_i)$ of
+\eqref{eq:pprop}. Because $E_S\ll E_{\mathrm{tot}}$---that is, $N_S\ll N_B$---the
+bath entropy is linear over the range $E_S$ explores,
+$S_B(E_{\mathrm{tot}}-E_S)\simeq S_B(E_{\mathrm{tot}})-E_S/T$, and
+\eqref{eq:submarginal} becomes the Boltzmann weight
+$p(E_S)\propto\Omega_S(E_S)\,e^{-\beta E_S}$: \textbf{the hard constraint on the
+whole is a soft constraint on the part.} The bath's temperature is
+\emph{stiff}---$\dd\beta/\dd E=-1/(k_BT^{2}C_B)$ with $C_B\sim N_B$---so draining
+$E_S$ barely moves $\beta$; the discarded curvature is the finite-bath
+back-reaction, of order $E_S/E_{\mathrm{tot}}\sim N_S/N_B$. This linearisation
+\emph{is} the Taylor truncation \eqref{eq:expand} performed by hand in
+\S\ref{ssec:boltzdist}, now with its small parameter named. Figure
+\ref{fig:sf-cmarg} shows the whole statement in one frame: the exact
+hard-constraint marginal at $n=3$ is visibly not exponential (its support even
+ends at $\varepsilon=E$, the whole-bath back-reaction at full strength), and
+flows into the Boltzmann weight as $n$ grows.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=.62\linewidth]{figures/fig_sf_classical_marginal}
+\caption{The hard constraint on the whole becoming a soft constraint on the
+part. Exact marginal $P(\varepsilon)\propto\Omega_{\mathrm{bath}}(E-\varepsilon)
+=(1-\varepsilon/E)^{n-2}(n-1)/E$ of one classical oscillator in an isolated
+$n$-oscillator system at fixed total energy $E=nk_BT$
+\eqref{eq:submarginal}. At $n=3$ the finite bath is obvious---the distribution
+is not exponential and its support ends at $\varepsilon=E$; by $n=100$ it lies
+on the Boltzmann limit $e^{-\varepsilon/k_BT}$ (dashed). The convergence rate
+is the $N_S/N_B$ guard of the text.}
+\label{fig:sf-cmarg}
+\end{figure}
+
+\emph{When the guard fails.} Both equivalences are asymptotic and conditional. If
+$S(E)$ is non-concave the saddle of \eqref{eq:delta-laplace} is not unique---two
+compete, at a first-order transition---and the ensembles genuinely diverge, the
+very ensemble inequivalence just discussed; if the system is small,
+\eqref{eq:relfluct} is not negligible and the soft constraint is visibly looser
+than the hard one. So the instinct that the two ``ought to be the same thing'' is
+right only in the limit: they are one Laplace pair, made \emph{operationally}
+interchangeable by the $1/\sqrt N$ and $N_S/N_B$ separations, and distinguishable
+again the moment those separations close.
+
+Having set $Z$ against its microcanonical shadow, we can cash the whole
+construction out for the parcel: the building block below.
+
+
+\subsection{The building block, and how it feeds everything below}
+\label{ssec:buildingblock}
+
+Equation~\eqref{eq:idealSgen} is the payoff of this section and the answer to
+``how does the ideal-gas entropy relate to everything that follows''. It is not
+a monatomic curiosity: it is the single functional shape that each gaseous
+constituent of the parcel instantiates \emph{once}. Dry air and water vapour are
+both ideal gases, so each contributes
+\begin{equation}\label{eq:perspecies}
+s_k=c_{p,k}\ln T-R_k\ln(\text{its own partial pressure})+\mathrm{const},
+\end{equation}
+differing only in which $c_p$, which $R$, and---by Dalton's law
+(\S\ref{sec:parcel})---which partial pressure it sees. The total specific
+entropy of the parcel is then the mixing-ratio-weighted sum of these identical
+blocks plus a condensed-phase term (Gibbs additivity, \S\ref{sec:parcel}); once
+phase equilibrium is used to reintroduce the latent heat (\S\ref{sec:phase}),
+that sum is exactly Emanuel's \eqref{eq:E94}. In short: derive the block once
+here, and ``everything below'' is bookkeeping---which partial pressure, which
+$c_p$, which mixing ratio---layered on top of \eqref{eq:idealSgen}.
+
+\section{Classical scaffolding: why \texorpdfstring{$s$}{s} is a state function}
+\label{sec:classical}
+
+Statistical mechanics gives $s$; classical thermodynamics tells us it is a
+\emph{function of state}---indispensable, since the solver evaluates $s$ at a
+point $(T,p,\rvv)$ with no reference to how the parcel got there.
+
+\subsection{First and second laws}
+
+The first law for a closed system is $\dd U=\delta Q-\delta W$, with
+$\delta W=p\,\dd V$ for quasi-static volume work. Neither $\delta Q$ nor
+$\delta W$ is an exact differential: $\oint \delta Q\neq 0$. The second law
+supplies an \emph{integrating factor}. In Carath\'eodory's formulation, the
+empirical fact that arbitrarily close to any equilibrium state there exist
+states not reachable by any adiabatic path ($\delta Q=0$) is equivalent, for
+the Pfaffian form $\delta Q$, to the existence of an integrating denominator;
+that denominator is the absolute temperature $T$, and
+\begin{equation}\label{eq:dS}
+\dd s \;=\; \frac{\delta Q_{\mathrm{rev}}}{T}
+\end{equation}
+is an \emph{exact} differential. Its integral, $s$, is a state function. This
+is the precise sense in which ``entropy exists''.
+
+\subsection{Recovering \texorpdfstring{$s=c_p\ln T-R\ln p$}{s=cp lnT - R lnp} thermodynamically}
+
+For an ideal gas, $pV=nRT$ and $U=U(T)$ with $\dd U=c_v\,\dd T$ (Joule's law).
+Then $\delta Q_{\mathrm{rev}}=\dd U+p\,\dd V=c_v\,\dd T+p\,\dd V$, and with
+$p/T=R/v$ (specific volume $v$),
+\begin{equation}
+\dd s=\frac{c_v\,\dd T}{T}+\frac{R\,\dd v}{v}
+     =\frac{c_p\,\dd T}{T}-\frac{R\,\dd p}{p},
+\end{equation}
+using Mayer's relation $c_p-c_v=R$ and $\dd(\ln pv)=\dd\ln(RT)$ to switch
+variables. Integrating returns \eqref{eq:idealS}, now with the material $c_p$.
+Statistical mechanics and classical thermodynamics agree, as they must; the
+exactness of $\dd s$ (equivalently the Maxwell relation
+$\partial^2 s/\partial T\partial p=\partial^2 s/\partial p\partial T$) is what
+lets \texttt{entropy\_S} be a pure function of its three arguments.
+
+\section{The parcel as a multicomponent mixture}\label{sec:parcel}
+
+\subsection{Composition and the per-dry-air convention}
+
+The parcel is dry air plus water in vapour and (once saturated) condensed form.
+Masses are bookkept as \emph{mixing ratios} relative to the dry-air mass $m_d$:
+\begin{equation}
+\rvv=\frac{m_{\text{vapour}}}{m_d},\qquad
+\rl=\frac{m_{\text{liquid}}}{m_d},\qquad
+\rt=\rvv+\rl .
+\end{equation}
+Entropy is quoted \emph{per unit mass of dry air} because $m_d$ is the one mass
+that is conserved along the ascent (water changes phase, but dry air is inert
+and neither created nor removed); dividing by it gives a bookkeeping base that
+does not move. This is why \eqref{eq:target} carries $\Rd$ bare but weights the
+water terms by mixing ratios.
+
+\subsection{Dalton's law and the vapour--pressure relation}
+
+Each gas in an ideal mixture behaves as if it alone occupied the volume, so the
+total pressure is the sum of partial pressures (Dalton): $p=\pd+e$, with $e$
+the vapour partial pressure and $\pd=p-e$ the dry-air partial pressure. The
+mixing ratio and the partial pressure are two encodings of the same amount of
+vapour; equating $\rvv=m_v/m_d=(\eps^{-1}e)/(p-e)$ with $\eps=\Rd/\Rv$ gives the
+mutually inverse maps
+\begin{equation}\label{eq:evrv}
+e=\frac{\rvv\,p}{\eps+\rvv},\qquad
+\rvv=\frac{\eps\,e}{p-e},
+\end{equation}
+which are exactly \texttt{utilities.ev} and \texttt{utilities.rv}. The
+appearance of $p-e$ (not $p$) inside the dry-air logarithm of \eqref{eq:target}
+is Dalton's law at work: the dry air sees only its own partial pressure.
+
+\subsection{Additivity of entropy: Gibbs' theorem}
+
+For an ideal-gas mixture the entropy is the sum of the entropies each component
+would have alone at its own partial pressure and the common temperature
+(Gibbs' theorem---there is no entropy of mixing beyond what the partial
+pressures already encode, because ideal gases do not interact). Hence we may
+build $s$ additively:
+\begin{equation}\label{eq:additive}
+s \;=\; s_d \;+\; \rvv\, s_v \;+\; \rl\, \sigma_\ell,
+\end{equation}
+$s_d$ the specific entropy of dry air, $s_v$ that of vapour, and $\sigma_\ell$
+that of liquid water, each per unit mass of its own species. We now need the
+three pieces.
+
+\section{Water substance and phase equilibrium}\label{sec:phase}
+
+The gaseous pieces use \eqref{eq:idealS}:
+\begin{equation}\label{eq:sd-sv}
+s_d = \cpd\ln T - \Rd\ln \pd + \mathrm{const}_d,\qquad
+s_v = \cpv\ln T - \Rv\ln e + \mathrm{const}_v.
+\end{equation}
+Liquid water is nearly incompressible, so its entropy is essentially thermal,
+\begin{equation}\label{eq:sl}
+\sigma_\ell = \cl\ln T + \mathrm{const}_\ell .
+\end{equation}
+What ties the vapour and liquid constants together---and produces the latent
+term in \eqref{eq:target}---is phase equilibrium.
+
+\subsection{Chemical potential and the Clausius--Clapeyron relation}
+
+At a flat interface, vapour and liquid coexist when their specific Gibbs free
+energies (chemical potentials per unit mass) are equal, $g_v(T,\es)=g_\ell(T)$,
+which \emph{defines} the saturation vapour pressure $\es(T)$. Differentiating
+along the coexistence curve with $\dd g=-s\,\dd T+v\,\dd p$ gives
+\begin{equation}
+-s_v\,\dd T + v_v\,\dd\es \;=\; -\sigma_\ell\,\dd T + v_\ell\,\dd\es
+\;\Longrightarrow\;
+\frac{\dd\es}{\dd T}=\frac{s_v-\sigma_\ell}{v_v-v_\ell}.
+\end{equation}
+The reversible latent heat is the enthalpy of the isothermal, isobaric phase
+change, $\Lv=T(s_v-\sigma_\ell)$, i.e.\ the \emph{entropy of vaporisation} is
+\begin{equation}\label{eq:svap}
+s_v-\sigma_\ell=\frac{\Lv}{T}.
+\end{equation}
+With $v_v\gg v_\ell$ and $v_v=\Rv T/\es$ (ideal vapour), this is the
+Clausius--Clapeyron equation
+\begin{equation}\label{eq:cc}
+\frac{\dd\es}{\dd T}=\frac{\Lv\,\es}{\Rv\,T^{2}}.
+\end{equation}
+
+\subsection{Kirchhoff's relation and the coded fits}
+
+The latent heat itself depends on temperature. Applying
+$\dd\Lv/\dd T=\cpv-\cl$ (Kirchhoff's law: the two phases warm at different
+specific heats) and integrating from $0^{\circ}$C,
+\begin{equation}\label{eq:kirchhoff}
+\Lv(T)=\Lv^{0}+(\cpv-\cl)\,(T-T_0),
+\end{equation}
+which is exactly \texttt{utilities.Lv} (Table~\ref{tab:const}:
+$\Lv^0=2.501\times10^6$, slope $\cpv-\cl=-630$). Substituting
+\eqref{eq:kirchhoff} into \eqref{eq:cc} and integrating yields a closed
+expression for $\es(T)$; the code uses the algebraically cheaper
+August--Roche--Magnus fit
+\begin{equation}\label{eq:esfit}
+\es(T)=6.112\,\exp\!\Big(\frac{17.67\,T_C}{243.5+T_C}\Big)\ \mathrm{hPa},
+\qquad T_C=T-273.15,
+\end{equation}
+i.e.\ \texttt{utilities.es\_cc}, which reproduces the Clausius--Clapeyron
+integral to sub-percent accuracy over atmospheric temperatures. Equations
+\eqref{eq:svap}--\eqref{eq:esfit} are all we need from phase physics.
+
+\begin{remark}[the ``modified'' $\cl=2500\JkgK$]\label{rem:modcl}
+The true specific heat of liquid water is $\approx4190\JkgK$; \texttt{tcpyPI}
+(following \texttt{pcmin}) uses $2500$. This is a deliberate effective value
+that folds the ice phase and the temperature dependence of $\Lv$ into a single
+linear Kirchhoff slope $\cpv-\cl=-630$, tuned so that \eqref{eq:kirchhoff}
+tracks the observed $\Lv(T)$ across the mixed-phase range the parcel traverses.
+It changes the reference thermodynamics slightly but not the structure of any
+derivation here.
+\end{remark}
+
+\section{Assembling the total specific entropy}\label{sec:assembly}
+
+Insert \eqref{eq:sd-sv}--\eqref{eq:sl} into the additive decomposition
+\eqref{eq:additive} and use $\rl=\rt-\rvv$:
+\begin{align}
+s &= \big[\cpd\ln T-\Rd\ln\pd\big]
+   + \rvv\big[\cpv\ln T-\Rv\ln e\big]
+   + (\rt-\rvv)\,\cl\ln T + \mathrm{const} \notag\\
+  &= \cpd\ln T-\Rd\ln\pd
+   + \rt\,\cl\ln T
+   + \rvv\big[(\cpv-\cl)\ln T-\Rv\ln e\big] + \mathrm{const}.
+\label{eq:collected}
+\end{align}
+The bracket on the vapour term is where the latent heat re-enters. Evaluate
+\eqref{eq:svap} using \eqref{eq:sd-sv}--\eqref{eq:sl} \emph{at saturation}
+($e=\es$):
+\begin{equation}\label{eq:latentconst}
+\frac{\Lv}{T}=s_v-\sigma_\ell
+=(\cpv-\cl)\ln T-\Rv\ln\es+(\mathrm{const}_v-\mathrm{const}_\ell).
+\end{equation}
+Solve \eqref{eq:latentconst} for $(\cpv-\cl)\ln T$ and substitute into the
+bracket of \eqref{eq:collected}:
+\begin{align}
+(\cpv-\cl)\ln T-\Rv\ln e
+&=\Big[\tfrac{\Lv}{T}+\Rv\ln\es-(\mathrm{const}_v-\mathrm{const}_\ell)\Big]-\Rv\ln e
+\notag\\
+&=\frac{\Lv}{T}-\Rv\ln\frac{e}{\es}-(\mathrm{const}_v-\mathrm{const}_\ell)
+ =\frac{\Lv}{T}-\Rv\ln H+\mathrm{const}.
+\end{align}
+Putting this back into \eqref{eq:collected} and absorbing all reference
+constants,
+\begin{equation}\label{eq:E94}
+\boxed{\;s=(\cpd+\rt\,\cl)\ln T-\Rd\ln(p-e)+\frac{\Lv\,\rvv}{T}-\rvv\,\Rv\ln H.\;}
+\end{equation}
+This is Emanuel (1994), eq.~4.5.9, and term-for-term it is \eqref{eq:target}
+and \texttt{utilities.entropy\_S}. The four terms carry the four physical
+meanings we tracked from the start:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Term & Physical content \\
+\midrule
+$(\cpd+\rt\cl)\ln T$ & thermal entropy of dry air $+$ all condensate carried\\
+$-\Rd\ln(p-e)$ & configurational entropy of the dry air (Dalton partial pressure)\\
+$+\Lv\rvv/T$ & latent entropy stored in the vapour fraction (Clausius--Clapeyron)\\
+$-\rvv\Rv\ln H$ & dilution entropy of sub-saturated vapour ($H<1\Rightarrow{>}0$)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{remark}[the single-argument \texttt{R}, and reduction below saturation]
+The code's \eqref{eq:target} uses one mixing ratio \texttt{R} in every water
+term, i.e.\ it identifies $\rvv=\rt=R$. That is exact wherever the parcel is
+unsaturated, which is precisely where \texttt{entropy\_S} is called: at the
+launch state, to set the conserved reference $s_0$. Below the lifting
+condensation level all water is vapour, $\rl=0$, and \eqref{eq:E94} is the
+familiar dry/unsaturated entropy with $H<1$. The generalisation to $\rvv<\rt$
+(condensate present) is carried implicitly by the saturated form used in the
+inversion, \eqref{eq:SGcode} below, where $H=1$ retires the last term.
+\end{remark}
+
+\section{Why \texorpdfstring{$s$}{s} is conserved on the ascent}
+\label{sec:conservation}
+
+\subsection{The exact entropy budget}
+
+For the parcel as a closed system, the Clausius inequality splits any change of
+entropy into a reversible flux and an irreversible production:
+\begin{equation}\label{eq:budget}
+\dd s \;=\; \underbrace{\frac{\delta Q}{T}}_{\text{flux}}
+        \;+\; \underbrace{\dd s_{\mathrm{irr}}}_{\ge 0\ \text{(production)}} .
+\end{equation}
+The parcel model annihilates both terms by two idealisations.
+
+\paragraph{Adiabatic: no flux, $\delta Q=0$.} Convective ascent is fast
+compared with the time for heat to diffuse or radiate across the parcel
+boundary. Formally, the ratio of the advective timescale $H_\rho/w$ (density
+scale height over vertical velocity, minutes) to the thermal-diffusion and
+radiative timescales (hours to days) is $\ll1$, so $\delta Q\approx0$ over the
+ascent. The first term of \eqref{eq:budget} vanishes.
+
+\paragraph{Reversible: no production, $\dd s_{\mathrm{irr}}=0$.} The parcel is
+assumed to remain in internal thermodynamic equilibrium---uniform $T$ and $p$,
+no turbulent entrainment or mixing with the environment, and, crucially, phase
+change occurring exactly at saturation. At saturation the chemical potentials
+are equal, $g_v=g_\ell$ (\S\ref{sec:phase}), so transferring water across the
+phase boundary produces \emph{no} entropy: condensation onto a parcel held at
+$H=1$ is reversible. (Condensing sub- or super-saturated vapour would carry a
+finite $\Delta g$ per unit mass and generate $\dd s_{\mathrm{irr}}>0$.) The
+second term of \eqref{eq:budget} vanishes.
+
+Together, $\delta Q=0$ and $\dd s_{\mathrm{irr}}=0$ give
+\begin{equation}\label{eq:isentropic}
+\boxed{\;\dd s = 0 \quad\text{along the ascent}\;}
+\end{equation}
+---the ascent is \emph{isentropic}. This is the entire justification for
+holding \texttt{entropy\_S} fixed.
+
+\subsection{Closed for water: reversible vs.\ pseudo-adiabatic}
+
+Conservation of \eqref{eq:E94} as a function of $(T,p)$ alone additionally
+requires that the water inventory not change: the ``reversible'' adiabat keeps
+all condensate suspended in the parcel, so $\rt=\mathrm{const}$ and the parcel
+is a closed system for water. In the code this is the default
+\texttt{ascent\_flag}$=0$; the density temperature (\S\ref{sec:adiabat}) then
+carries the full water loading $\rt$. The alternative
+\texttt{ascent\_flag}$=1$ (\emph{pseudo}-adiabatic) removes condensate the
+instant it forms: the system is then \emph{open}, $\rt$ is not conserved, and
+the invariant is not \eqref{eq:E94} but an approximate pseudo-entropy. The
+distinction is physical, not numerical.
+
+\subsection{The microscopic reading}\label{ssec:micro}
+
+Statistical mechanics gives \eqref{eq:isentropic} a clean interpretation. A
+reversible adiabatic change is a \emph{slow} deformation of the parcel's
+Hamiltonian (volume and level spacings change as $p$ and $T$ change) with no
+coupling to a heat bath. Two theorems then apply. By \textbf{Liouville's
+theorem}, phase-space volume is invariant under Hamiltonian flow; by the
+\textbf{adiabatic theorem}, a sufficiently slow deformation preserves the
+occupation probability of each state (no transitions between energy shells).
+The accessible phase-space volume $\Omega$ is therefore unchanged, and by
+\eqref{eq:boltzmann} so is $S$; equivalently every $p_i$ in the Gibbs form
+\eqref{eq:gibbs} is frozen, so $-k_B\sum p_i\ln p_i$ is constant even as the
+individual energy levels move. Isentropic literally means \emph{the
+microstate count does not change---the levels merely shift}. Note that the two
+senses of ``adiabatic'' (thermodynamic: no heat; mechanical: slow) here
+coincide, which is why the slow, heat-free ascent lands on a single adiabat.
+This is the closed-system twin of \S\ref{ssec:typicality}: there the same
+no-reservoir, single-Hamiltonian stance fixes \emph{which} weights $p_i$ are
+canonical (a pure state's reduced density matrix); here it explains why those
+weights are \emph{frozen} under the reversible ascent. Together they carry both
+halves of the Gibbs entropy \eqref{eq:gibbs}---the value of the weights and
+their constancy---without ever invoking a heat bath.
+
+\section{The moist adiabat and buoyancy}\label{sec:adiabat}
+
+\subsection{From $\dd s=0$ to a path}
+
+Because $s$ is a state function, \eqref{eq:isentropic} is a differential
+constraint that pins the path in the $(T,p)$ plane:
+\begin{equation}\label{eq:pathODE}
+0=\dd s=\frac{\partial s}{\partial T}\,\dd T+\frac{\partial s}{\partial p}\,\dd p
+\;\Longrightarrow\;
+\frac{\dd T}{\dd p}=-\frac{\partial s/\partial p}{\partial s/\partial T}.
+\end{equation}
+This ODE is the moist adiabat. Two regimes:
+
+\paragraph{Unsaturated (below the LCL): the dry adiabat.} With $\rvv=\rt$ fixed
+and no condensation, the dominant balance of \eqref{eq:E94} is
+$s\approx(\cpd+\rt\cl)\ln T-\Rd\ln\pd+\mathrm{const}$. Holding $s$ and the water
+constant and treating the small vapour corrections as constant, $\dd s=0$ gives
+$c_p\,\dd\ln T=\Rd\,\dd\ln p$ (with the appropriate moist $c_p$), i.e.\ Poisson's
+relation
+\begin{equation}\label{eq:poisson}
+T\propto p^{\,\Rd/c_p},\qquad
+\theta\equiv T\Big(\frac{p_0}{p}\Big)^{\Rd/c_p}=\mathrm{const},
+\end{equation}
+the conserved (virtual) potential temperature. This is exactly the branch the
+CAPE routine takes below the condensation level, where it writes
+$T_G=T_P\,(p/p_P)^{\Rd/\cpd}$.
+
+\paragraph{The lifting condensation level.} As the unsaturated parcel cools
+along \eqref{eq:poisson}, $\es(T)$ falls (Clausius--Clapeyron) while $e$ falls
+only with pressure; $H=e/\es$ rises to $1$. The pressure at which $H=1$ is the
+\emph{lifting condensation level} (LCL), \texttt{utilities.e\_pLCL} in the
+code. Above it the parcel is saturated.
+
+\paragraph{Saturated (above the LCL): the moist adiabat proper.} Now
+$\rvv=r_s(T,p)=\eps\es(T)/(p-\es)$ is pinned to saturation and
+$\rl=\rt-r_s$ is condensate. Substituting into \eqref{eq:pathODE} (equivalently
+differentiating \eqref{eq:E94} at $H=1$) gives the saturated adiabatic lapse
+rate; its steepness is set by the latent-heat release, and the temperature
+sensitivity is dominated by $\dd r_s/\dd T$ through Clausius--Clapeyron. Rather
+than integrate this ODE, the solver conserves $s$ algebraically---the inversion
+of \S\ref{sec:inversion}.
+
+\subsection{Density temperature and buoyancy}
+
+The dynamically relevant temperature is the \emph{density temperature}
+$\Trho$, defined so that $p=\rho\,\Rd\,\Trho$ holds with the dry-air gas
+constant despite the moisture. Accounting for vapour (which lightens the air,
+$\Rv>\Rd$) and suspended condensate (which weighs it down),
+\begin{equation}\label{eq:trho}
+\Trho=T\,\frac{1+\rvv/\eps}{1+\rt},
+\end{equation}
+exactly \texttt{utilities.Trho(T,\,$\rt$,\,$\rvv$)}. The buoyancy (per unit
+mass) that drives the parcel is the fractional density deficit at equal
+pressure, i.e.\ the density-temperature excess over the environment,
+\begin{equation}\label{eq:buoy}
+b \;=\; g\,\frac{\Trho^{\mathrm{p}}-\Trho^{\mathrm{e}}}{\Trho^{\mathrm{e}}},
+\end{equation}
+and hydrostatic balance for the environment,
+$\dd z=-(\Rd\,\Trho^{\mathrm{e}}/g)\,\dd\ln p$, turns its vertical integral
+into the pressure integral
+\begin{equation}\label{eq:cape}
+\mathrm{CAPE}
+=\int b\,\dd z
+=\int_{p}^{p_{\mathrm{launch}}}\Rd\,
+ \big(\Trho^{\mathrm{p}}-\Trho^{\mathrm{e}}\big)\,\dd\ln p,
+\end{equation}
+exactly the $\Rd\,\Delta\Trho\,\Delta\ln p$ increments the CAPE routine
+accumulates level by level. The parcel's self-determined adiabat
+(\S\ref{sec:conservation}) is compared against the sounding; the environment
+enters only here, in the comparison, and the parcel's own $T(p)$ came entirely
+from conserving $s$.
+
+\section{The inversion: recovering \texorpdfstring{$T$}{T} from \texorpdfstring{$s$}{s}}
+\label{sec:inversion}
+
+\subsection{Definition and well-posedness}
+
+At each new pressure level the solver knows the conserved entropy $s_0$ and
+must find the temperature consistent with it. This is a function
+\emph{inversion}: given the forward map $T\mapsto s(T,p)$ at fixed $p$ (and
+$\rt$), solve
+\begin{equation}\label{eq:invert}
+s(T,p)=s_0 \qquad\text{for } T=s^{-1}(s_0;p).
+\end{equation}
+An inverse exists and is unique wherever the forward map is strictly monotone.
+Differentiate the saturated entropy---the relevant branch for the inversion,
+\begin{equation}\label{eq:SGcode}
+s_{\mathrm{sat}}(T)=(\cpd+\rt\,\cl)\ln T-\Rd\ln(p-\es)+\frac{\Lv\,r_s}{T},
+\end{equation}
+(the $-\rvv\Rv\ln H$ term is gone because $H=1$)---with respect to $T$ at fixed
+$p$. Using Clausius--Clapeyron \eqref{eq:cc} for $\dd r_s/\dd T$, the dominant
+terms give
+\begin{equation}\label{eq:dsdT}
+\frac{\partial s_{\mathrm{sat}}}{\partial T}
+=\frac{1}{T}\left(\cpd+\rt\,\cl+\frac{\Lv^{2}\,r_s}{\Rv\,T^{2}}\right) \;>\;0.
+\end{equation}
+Every term is manifestly positive, so $s_{\mathrm{sat}}(\cdot)$ is strictly
+increasing and \eqref{eq:invert} has a unique root. By the inverse function
+theorem the inverse is itself $C^1$ with derivative
+$(s^{-1})'=1/(\partial s/\partial T)$. The inversion is well posed---this is the
+``smooth, strictly monotone entropy relation'' invoked without proof in the
+companion analysis. Figure~\ref{fig:sf-inv}(a) draws \eqref{eq:SGcode} with the
+code's own formulas: at each pressure the curve is strictly increasing, the
+level line $s=s_0$ cuts it exactly once, and the family of intersections
+\emph{is} the moist adiabat of \S\ref{sec:adiabat}.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=\linewidth]{figures/fig_sf_inversion}
+\caption{The inversion, computed with the code's own algebra (the script
+transcribes \texttt{es\_cc}, \texttt{Lv}, \texttt{ev}/\texttt{rv},
+\texttt{entropy\_S} and the solver loop, and cross-checks each against the
+source docstring examples). (a)~Saturated entropy \eqref{eq:SGcode} against
+temperature for five pressure levels, with the conserved
+$s_0=\texttt{entropy\_S}(300\K,\,0.018,\,1000\hPa)$ as the dashed level line;
+by the monotonicity \eqref{eq:dsdT} each curve crosses it exactly once (dots;
+the $1000\hPa$ level sits below the LCL of this parcel, so its crossing is not
+marked), and the dots trace the moist adiabat $T(p)$. (b)~Error of the guarded
+Newton iteration \eqref{eq:newton} at $500\hPa$ from a warm and a cold start:
+the first two steps are relaxed ($\texttt{AP}=0.3$, shaded), after which the
+error collapses quadratically to the $10^{-3}\K$ stopping tolerance.}
+\label{fig:sf-inv}
+\end{figure}
+
+\subsection{Newton iteration, and its appearance in the code}
+
+There is no closed form for $s^{-1}$, so the solver inverts numerically by
+Newton--Raphson on the residual $F(T)=s_{\mathrm{sat}}(T)-s_0$:
+\begin{equation}\label{eq:newton}
+T_{n+1}=T_n-\frac{F(T_n)}{F'(T_n)}
+       =T_n+\frac{s_0-s_{\mathrm{sat}}(T_n)}{\partial s_{\mathrm{sat}}/\partial T}.
+\end{equation}
+This is exactly \texttt{solve\_temperature\_from\_entropy}: its variable
+\texttt{SG} is $s_{\mathrm{sat}}(T_n)$ of \eqref{eq:SGcode}, its \texttt{SL} is
+the derivative \eqref{eq:dsdT},
+\[
+\texttt{SL}=\frac{\cpd+\rt\,\cl+\Lv^2 r_s/(\Rv T^2)}{T},
+\]
+and the update \texttt{TGNEW = TG + AP*(S-SG)/SL} is \eqref{eq:newton} with a
+relaxation factor \texttt{AP} (smaller for the first steps, then unity) guarding
+against overshoot from a poor initial guess. Quadratic convergence follows from
+$F\in C^2$ and $F'\neq0$, both guaranteed by \eqref{eq:dsdT}. The positivity of
+\texttt{SL} is not a numerical convenience; it is the inverse-function-theorem
+hypothesis, and \eqref{eq:dsdT} shows it holds term by term.
+
+\begin{remark}[why this is the ``entropy relation'', not a lapse-rate integral]
+One could instead integrate the moist-adiabat ODE \eqref{eq:pathODE} in $p$.
+Conserving $s$ algebraically via \eqref{eq:invert} is preferable: it carries no
+accumulated integration error, it makes the conserved quantity exact at every
+level by construction, and it exposes the monotonicity \eqref{eq:dsdT} that
+guarantees a unique parcel temperature. The price---a root-find per level---is
+cheap and quadratically convergent.
+\end{remark}
+
+\section{Synthesis}\label{sec:synthesis}
+
+The chain is now complete and first-principled at every link:
+\begin{enumerate}
+\item Entropy is a microstate count, $S=k_B\ln\Omega=-k_B\sum p_i\ln p_i$
+      (\S\ref{sec:statmech}); for an ideal gas it evaluates to
+      $s=c_p\ln T-R\ln p+\mathrm{const}$ (Sackur--Tetrode).
+\item The Boltzmann weights need no external reservoir: canonical typicality
+      derives them from a single pure state of one closed system---exactly, for
+      $n$ oscillators---with the equal-\emph{a-priori} postulate demoted to a
+      concentration-of-measure theorem, its exceptional states identified, and
+      the separate (dynamical) status of ergodicity flagged
+      (\S\ref{ssec:typicality}). Nor was the flat prior itself load-bearing:
+      any weighting whose bath-conditioned tilt is $\ll\beta$ gives the same
+      physics, sorting all priors into a four-tier gauge hierarchy whose only
+      dangerous member is a tilt conjugate to an observable in play
+      (\S\ref{ssec:priorclass}).
+\item The microcanonical $S(E)$ and canonical $Z(\beta)$ are Laplace duals
+      whose thermodynamic-limit shadow is the Legendre transform; hard
+      (fixed-$E$) and soft (fixed-$\beta$) constraints are operationally
+      interchangeable under the $1/\sqrt N$ and $N_S/N_B$ separations of scale,
+      and $Z$ is the smoother, factorising, cumulant-generating side of the
+      pair wherever $S(E)$ is concave (\S\ref{ssec:bridge}).
+\item The second law makes $s$ an exact state function via the integrating
+      factor $1/T$ (\S\ref{sec:classical}), so it may be evaluated pointwise.
+\item The parcel is a Dalton mixture; entropy adds over components at their
+      partial pressures (\S\ref{sec:parcel}), and phase equilibrium
+      ($g_v=g_\ell$) yields Clausius--Clapeyron and the vaporisation entropy
+      $\Lv/T$ (\S\ref{sec:phase}).
+\item Summing dry air, vapour, and condensate gives Emanuel's total specific
+      entropy \eqref{eq:E94}---\texttt{utilities.entropy\_S} exactly
+      (\S\ref{sec:assembly}).
+\item It is conserved because the ascent is adiabatic (no flux) and reversible
+      (no production, phase change at saturation), and reversible ascent keeps
+      $\rt$ fixed (\S\ref{sec:conservation}); microscopically, Liouville plus
+      the adiabatic theorem freeze $\Omega$.
+\item Conserving $s$ defines the moist adiabat \eqref{eq:pathODE} and, via the
+      strictly monotone \eqref{eq:dsdT}, a well-posed inversion
+      $s(T,p)=s_0\mapsto T$ that \texttt{solve\_temperature\_from\_entropy}
+      performs by guarded Newton iteration (\S\ref{sec:adiabat}--\ref{sec:inversion}).
+\end{enumerate}
+Every constant, fit, and function named above appears in the \texttt{tcpyPI}
+source---in \texttt{constants.py}, \texttt{utilities.py}, and \texttt{pi.py};
+the physics that justifies each is derived here rather than asserted, and every
+figure is regenerated from those same formulas by
+\texttt{scripts/foundations\_figs.py} (Fig.~\ref{fig:sf-inv} by running the
+solver's own transcribed algebra, cross-checked against the source docstring
+examples). The one modelling choice
+worth flagging for a physicist reading the code is the effective
+$\cl=2500\JkgK$ (Remark~\ref{rem:modcl}); everything else is textbook
+thermodynamics assembled in the meteorologist's per-dry-air bookkeeping.
+
+\end{document}
