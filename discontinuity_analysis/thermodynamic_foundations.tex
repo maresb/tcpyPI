@@ -56,7 +56,7 @@
 \large A first-principles derivation of \texttt{entropy\_S}, its conservation,\\
 and the temperature inversion on the reversible adiabat}
 \author{Companion to \emph{An artificial discontinuity in the tcpyPI pressure solver}}
-\date{July 20, 2026}
+\date{July 22, 2026}
 
 \begin{document}
 \maketitle
@@ -73,11 +73,14 @@ equation to the ideal-gas form $s=c_p\ln T-R\ln p+\mathrm{const}$, treat the
 parcel as a multicomponent Dalton mixture with a condensed phase, derive the
 Clausius--Clapeyron relation and the latent-heat entropy from equality of
 chemical potentials, and assemble Emanuel's total specific entropy
-(E94, eq.~4.5.9)---the exact expression in the code. Two modern interludes
+(E94, eq.~4.5.9)---the exact expression in the code. Three modern interludes
 deepen the statistical part: \emph{canonical typicality}, which derives the
 Boltzmann weights of a small subsystem from a single pure state of one closed
 system---worked exactly on $n$ harmonic oscillators, exceptional states
-included---and the \emph{Laplace--Legendre bridge} between the microcanonical
+included; a \emph{flat-prior audit}, which demotes the equal-\emph{a-priori}
+postulate to a gauge choice within an equivalence class of priors whose only
+invariant is a tilt criterion against the constraint's clamping slope; and the
+\emph{Laplace--Legendre bridge} between the microcanonical
 $S(E)$ and the canonical $Z(\beta)$, including why the hard energy constraint
 and the soft Boltzmann weight are Laplace duals whose equivalence is guarded by
 two separations of scale. We then prove the entropy is
@@ -167,6 +170,22 @@ double-duty is the price of quoting each source in its own dialect.
 \end{remark}
 
 \section{The statistical origin of entropy}\label{sec:statmech}
+
+This is the longest section, and it moves in four sweeps. First the
+\emph{derivation} (\S\ref{ssec:operator}--\ref{ssec:boltzdist}): what the
+symbols mean operator-theoretically, and the Boltzmann distribution obtained
+the classical way, from a reservoir and an equal-probability postulate. Second,
+an \emph{audit} of that derivation's most metaphysical input
+(\S\ref{ssec:typicality}--\ref{ssec:priorclass}): canonical typicality removes
+the ensemble altogether, and a companion argument shows the flat prior is
+merely the convenient representative of an enormous equivalence class. Third,
+the \emph{computation} (\S\ref{ssec:Z}--\ref{ssec:polyatomic}): from $Z$
+through Sackur--Tetrode to $s=c_p\ln T-R\ln p$ for every ideal gas in the
+parcel. Fourth, the \emph{reflection} (\S\ref{ssec:bridge}): the exact
+Laplace--Legendre bridge between the microcanonical $S(E)$ and the canonical
+$Z(\beta)$, closing with the hard-vs-soft-constraint reading of everything that
+came before. The payoff, \S\ref{ssec:buildingblock}, feeds the rest of the
+note.
 
 \subsection{The operator picture underneath}\label{ssec:operator}
 
@@ -335,7 +354,13 @@ weak coupling, so energies add. (Equivalently, by Jaynes' maximum-entropy
 argument, \eqref{eq:boltzdist} is the distribution that maximises
 \eqref{eq:gibbs} subject only to $\sum_i p_i=1$ and a fixed mean energy
 $\langle E\rangle=\sum_i p_iE_i$, with $\beta$ the Lagrange multiplier for
-energy---the two derivations agree.)
+energy---the two derivations agree.) Assumption~(i) is the one that feels
+metaphysical---why should ignorance be \emph{flat}?---and the next two
+subsections take it apart from opposite ends: \S\ref{ssec:typicality} removes
+the ensemble altogether (a single pure state suffices), and
+\S\ref{ssec:priorclass} shows that even within ensemble language the flat
+prior is only the convenient representative of an enormous class of priors
+that all give the same physics.
 
 \subsection{The reservoir from the inside: canonical typicality and the
 \texorpdfstring{$n$}{n}-oscillator example}\label{ssec:typicality}
@@ -640,6 +665,102 @@ system read through a single theorem. This is the same closed-system stance that
 are canonical, and why they stay frozen---each dispensing with the reservoir in
 favour of one Hamiltonian.
 
+\subsection{The flat prior as a gauge choice: how little postulate (i) does}
+\label{ssec:priorclass}
+
+Typicality attacked postulate~(i) by discarding the ensemble. This subsection
+attacks it from within ensemble language, and the conclusion is that the
+postulate is drastically overstated: what the physics actually requires of the
+prior is far weaker than flatness, and the flat choice is best understood as a
+\emph{gauge fixing}---one convenient representative of an equivalence class of
+priors that are pairwise indistinguishable by any measurement in play.
+
+\paragraph{The invariant.} Strike postulate~(i) and put \emph{arbitrary}
+weights $w_i>0$ on the shell microstates, $p_i=w_i/\sum_j w_j$. Rerunning the
+marginalisation of \S\ref{ssec:boltzdist} for the energy $\varepsilon$ of a
+small subsystem generalises \eqref{eq:pprop} by one factor:
+\begin{equation}\label{eq:priorclass}
+p(\varepsilon)\;\propto\;\bar w(\varepsilon)\,
+\Omega_S(\varepsilon)\,\Omega_B(E_{\mathrm{tot}}-\varepsilon),
+\qquad
+\bar w(\varepsilon)\equiv
+\text{mean of }w_i\text{ over the bath states at that }\varepsilon
+\end{equation}
+(with $w\equiv1$ this is \eqref{eq:submarginal} of \S\ref{ssec:bridge}, where
+its Boltzmann limit is taken). The Boltzmann factor comes from
+$\ln\Omega_B$ falling at rate $\beta$ per unit $\varepsilon$; the prior can
+disturb it only through $\bar w$. So the \emph{entire} operational content of
+postulate~(i) is the inequality
+\begin{equation}\label{eq:priorcrit}
+\boxed{\;\Big|\frac{\dd\ln\bar w}{\dd\varepsilon}\Big|\;\ll\;\beta
+=\frac{\dd\ln\Omega_B}{\dd\varepsilon}\;}
+\end{equation}
+---the \emph{coarse-grained} prior's tilt must be subdominant to the bath's
+clamping slope. Flatness is sufficient, memorable, and far stronger than
+necessary.
+
+\paragraph{Wilder than expected: magnitude is free if uncorrelated.} Notice
+what \eqref{eq:priorcrit} does \emph{not} constrain: the individual $w_i$.
+Each $\bar w(\varepsilon)$ averages over $\Omega_B=e^{S_B/k_B}$ bath states,
+so for weights fluctuating independently of $\varepsilon$ (any distribution
+with finite variance), concentration gives
+$\bar w(\varepsilon)=\langle w\rangle\big(1+O(e^{-S_B/2k_B})\big)$ for every
+$\varepsilon$ at once: even \emph{extensive} log-spread among the individual
+weights leaves the marginal Boltzmann to exponential accuracy, provided the
+wildness does not know about $\varepsilon$. And \S\ref{ssec:typicality} has
+already demonstrated exactly this without saying so: a Haar-random state
+assigns weights $|c_i|^2$ that are i.i.d.\ exponential variables---relative
+fluctuation $100\%$ per state, largest-to-smallest ratio of order
+$d_R\ln d_R$, i.e.\ log-spread of order $S/k_B$, about as far from flat as a
+prior can be---and Fig.~\ref{fig:sf-typ} shows the resulting $\rho_S$ thermal
+to $10^{-28}$. \emph{Canonical typicality is prior-robustness, quantified}:
+the theorem does not protect the flat prior; it proves the flat prior was
+never load-bearing.
+
+\paragraph{The four tiers.} The oscillator sorts every prior into a hierarchy,
+one line each:
+\begin{enumerate}
+\item \textbf{Tilt conjugate to the conserved total}, $w_i=e^{-\lambda M}$:
+constant on the shell (where $M$ is fixed), hence \emph{exactly} invisible---a
+pure gauge transformation. (Pleasingly, this is why $\beta$ itself is physical
+only \emph{across} shells.)
+\item \textbf{Generic randomness of any magnitude}, $w_i$ i.i.d.: washed out
+at $O(e^{-S_B/2k_B})$ by bath averaging, as above (Fig.~\ref{fig:sf-typ}).
+Gauge in practice.
+\item \textbf{Smooth coarse tilt obeying \eqref{eq:priorcrit}}: shifts the
+saddle of \S\ref{ssec:bridge} at subleading order; all thermodynamics
+unchanged in the limit.
+\item \textbf{Tilt conjugate to a subsystem observable},
+$w_i=e^{-\lambda k_1}$: the marginal ratio \eqref{eq:sho-ratio} acquires a
+factor $e^{-\lambda}$, i.e.\ $x\to xe^{-\lambda}$---oscillator~$1$ sits at a
+\emph{different temperature}, $\beta_1\hbar\omega=\beta\hbar\omega+\lambda$.
+Visible for any $\lambda\sim O(1)$, because it competes with the clamping
+\emph{slope}, not the clamping \emph{range}. This is the genuinely wrong
+prior, and the atypical Fock state of Remark~\ref{rem:atypical} is its
+$\lambda\to-\infty$ extreme: all weight on a single conspirator.
+\end{enumerate}
+The restated postulate is then honest and minimal: \emph{the prior must carry
+no tilt conjugate to an observable in play, beyond one negligible against
+$\beta$; everything else about it is unmeasurable.}
+
+\paragraph{Whole-system quantities, dynamics, and Jaynes.} For global
+thermodynamics the criterion is cruder still: any prior whose log-weights
+have subextensive spread has Shannon entropy $\ln\Omega+o(N)$, so $S$,
+$T=\partial S/\partial E$, and everything intensive are unchanged per particle
+---in large-deviation language, a prior with zero rate function cannot move a
+rate function, which is why ensemble equivalence never noticed the choice.
+Dynamics then explains which representative we write down: the flat
+(microcanonical) measure is the unique stationary one absolutely continuous
+with respect to Liouville measure for ergodic dynamics---the fixed point of
+the class---while the eigenstate-thermalisation property of
+\S\ref{ssec:typicality} is the statement that chaotic evolution manufactures
+tier-2 genericity out of almost any initial weighting.
+Jaynes' maximum-entropy reading lands as a deliberate anti-climax: choose the
+flat prior not because nature is flat but because, within the class, it is the
+representative that adds no spurious information---and the class structure is
+precisely why the choice was never falsifiable. With the postulate audited
+from both ends, we can run the canonical machinery with a clear conscience.
+
 \subsection{From \texorpdfstring{$Z$}{Z} to entropy, and indistinguishable particles}
 \label{ssec:Z}
 
@@ -704,12 +825,174 @@ with $z$ the single-particle partition function and $\varepsilon$ a
 single-particle energy (contrast $E_i$, the whole-system energy of
 \S\ref{ssec:BG}). Everything now hinges on $z$.
 
+\subsection{The translational partition function and the thermal de~Broglie wavelength}
+\label{ssec:lambda}
+
+For a structureless particle in a box of volume $V$ the energy is purely
+kinetic, $\varepsilon=\mathbf p^{2}/2m$. In the classical (dilute,
+non-degenerate) regime the sum over single-particle states becomes a
+phase-space integral with one state per volume $h^{3}$ of phase space:
+\begin{equation}\label{eq:ztrans1}
+z_{\mathrm{tr}}=\frac{1}{h^{3}}\int_V\!\dd^{3}r\int_{\mathbb R^3}\!\dd^{3}p\;
+e^{-\beta \mathbf p^{2}/2m}
+=\frac{V}{h^{3}}\prod_{i=x,y,z}\int_{-\infty}^{\infty}\!\dd p_i\,
+e^{-\beta p_i^{2}/2m}.
+\end{equation}
+Each of the three Gaussian integrals evaluates to
+$\int_{-\infty}^{\infty}e^{-\beta p^{2}/2m}\dd p=\sqrt{2\pi m/\beta}
+=\sqrt{2\pi m k_BT}$, so
+\begin{equation}\label{eq:ztrans2}
+z_{\mathrm{tr}}=\frac{V\,(2\pi m k_BT)^{3/2}}{h^{3}}\equiv\frac{V}{\Lambda^{3}},
+\qquad
+\boxed{\;\Lambda\equiv\frac{h}{\sqrt{2\pi m k_BT}}\;}
+\end{equation}
+The length $\Lambda$ is the \emph{thermal de~Broglie wavelength}: the quantum
+coherence scale of a particle with thermal momentum
+$\sim\!\sqrt{m k_BT}$. It carries the entire temperature dependence of
+$z_{\mathrm{tr}}$, as $\Lambda^{3}\propto T^{-3/2}$. The classical treatment
+\eqref{eq:ZN}--\eqref{eq:ztrans1} is valid precisely when $n\Lambda^{3}\ll1$
+(mean spacing $\gg$ coherence length); for air at surface conditions
+$n\Lambda^{3}\sim10^{-6}$, so the approximation is excellent.
+
+\subsection{Free energy and the Sackur--Tetrode entropy}\label{ssec:sackur}
+
+Take a monatomic gas first, $z=z_{\mathrm{tr}}=V/\Lambda^{3}$ (no internal
+structure). From \eqref{eq:ZN}, $\ln Z_N=N\ln z-\ln N!$, and with Stirling's
+approximation $\ln N!\simeq N\ln N-N$,
+\begin{equation}\label{eq:Fmon}
+F=-k_BT\ln Z_N
+=-N k_BT\Big[\ln\frac{z}{N}+1\Big]
+=-N k_BT\Big[\ln\frac{V}{N\Lambda^{3}}+1\Big].
+\end{equation}
+The entropy follows from \eqref{eq:SfromF}. Writing
+$\ln(V/N\Lambda^{3})=\ln(V/N)+\tfrac32\ln T+C_0$ with
+$C_0=\tfrac32\ln(2\pi m k_B/h^{2})$ temperature-independent, only the
+$\tfrac32\ln T$ piece and the explicit prefactor $T$ depend on temperature:
+\begin{align}
+S=-\frac{\partial F}{\partial T}
+&=N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+1\Big]
+ +N k_BT\cdot\frac{3}{2T} \notag\\
+&=N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+\underbrace{1}_{\text{from }F}
+      +\underbrace{\tfrac32}_{\partial_T(\tfrac32 T\ln T)}\Big]
+ =N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+\frac{5}{2}\Big].
+\label{eq:sackur}
+\end{align}
+This is the \emph{Sackur--Tetrode} equation. Its additive $\tfrac52$ has a
+definite provenance: $1$ from the indistinguishability remainder (the $+1$ in
+$F$, i.e.\ the $-\ln N!$ Stirling term) and $\tfrac32$ from differentiating the
+thermal energy $\tfrac32 N k_BT$. Physically the two variable terms are the
+split we will track to the end: $\ln(V/N)$ is \emph{configurational} (positional
+microstates---more room per particle, more states), and
+$-3\ln\Lambda=\tfrac32\ln T+\mathrm{const}$ is \emph{thermal} (the momentum
+distribution broadens with $T$).
+
+\subsection{Intensive form, and the fate of the two \texorpdfstring{$5/2$}{5/2}'s}
+\label{ssec:intensive}
+
+Reduce \eqref{eq:sackur} to a specific entropy. Per particle, in units of
+$k_B$,
+\begin{equation}\label{eq:sperparticle}
+\tilde s\equiv\frac{S}{N k_B}=\ln\frac{V}{N\Lambda^{3}}+\frac52 .
+\end{equation}
+Use the ideal-gas law in the form $V/N=k_BT/p$ and
+$\Lambda^{-3}=(2\pi m k_B/h^{2})^{3/2}T^{3/2}$:
+\begin{align}
+\ln\frac{V}{N\Lambda^{3}}
+&=\ln\frac{k_BT}{p}+\frac32\ln T+C_0
+ =\underbrace{\ln T}_{\text{from }V/N}\;-\;\ln p\;+\;
+   \underbrace{\tfrac32\ln T}_{\text{from }\Lambda^{-3}}\;+\;C_1 \notag\\
+&=\frac52\ln T-\ln p+C_1 ,\qquad C_1=\ln k_B+C_0 .
+\label{eq:lnVNL}
+\end{align}
+Substituting into \eqref{eq:sperparticle},
+\begin{equation}\label{eq:monatomic}
+\tilde s=\frac52\ln T-\ln p+\Big(C_1+\frac52\Big)
+        =\underbrace{\frac52}_{=\,c_p/R}\ln T-\ln p+\mathrm{const}.
+\end{equation}
+There are \emph{two} factors of $5/2$ here and they behave oppositely---this is
+the crux:
+\begin{itemize}
+\item The \textbf{additive} $\tfrac52$ inherited from Sackur--Tetrode
+      \eqref{eq:sperparticle} is a pure constant. It is swallowed into the
+      reference constant in \eqref{eq:monatomic} and cancels in every entropy
+      \emph{difference}. So yes---it drops out of anything physical; it survives
+      only in the absolute, third-law-anchored entropy.
+\item The \textbf{coefficient} $\tfrac52$ multiplying $\ln T$ is not a constant
+      and does \emph{not} drop out. Equation~\eqref{eq:lnVNL} shows it is
+      assembled as $1+\tfrac32$: one power of $\ln T$ from the configurational
+      $\ln(V/N)=\ln(k_BT/p)$, and $\tfrac32$ from the thermal
+      $\Lambda^{-3}\!\propto T^{3/2}$. For a monatomic gas this equals $c_p/R$.
+\end{itemize}
+Multiplying \eqref{eq:monatomic} by the specific gas constant $R=k_B/m$ (mass
+$m$ per particle) turns $\tilde s$ into entropy per unit mass, and
+$\tfrac52 R=c_p$ for a monatomic gas, giving the building block
+\begin{equation}\label{eq:idealS}
+\boxed{\;s \;=\; c_p\ln T - R\ln p + \mathrm{const}.\;}
+\end{equation}
+
+\subsection{Beyond monatomic: internal degrees of freedom}\label{ssec:polyatomic}
+
+Sackur--Tetrode as derived assumes a structureless particle, so
+\eqref{eq:sackur} does \emph{not} apply verbatim to air ($\mathrm N_2,\mathrm
+O_2$) or water vapour ($\mathrm H_2\mathrm O$), which rotate and vibrate. Two
+things change, both controlled. First, the single-particle energy is a sum
+$\varepsilon=\varepsilon_{\mathrm{tr}}+\varepsilon_{\mathrm{int}}$
+(translation plus rotation, vibration, electronic), so the partition function
+\emph{factorises},
+\begin{equation}\label{eq:zfactor}
+z=z_{\mathrm{tr}}(T,V)\,z_{\mathrm{int}}(T),
+\end{equation}
+with the internal factor a function of $T$ alone (the internal level spacings do
+not depend on the box). Second, carrying $z_{\mathrm{int}}$ through
+\eqref{eq:Fmon}--\eqref{eq:sackur} adds an internal energy
+$u_{\mathrm{int}}=k_BT^{2}\,\dd\ln z_{\mathrm{int}}/\dd T$ per particle and a
+matching internal entropy; the extra heat capacity is
+$c_{v,\mathrm{int}}=\dd u_{\mathrm{int}}/\dd T$.
+
+The \textbf{equipartition theorem} makes this concrete: every quadratic degree
+of freedom that is thermally active contributes $\tfrac12 k_B$ to the
+per-particle heat capacity. Translation always gives $3\times\tfrac12$;
+rotation adds $2\times\tfrac12$ for a linear molecule ($\mathrm N_2,\mathrm
+O_2,\mathrm{CO}_2$) or $3\times\tfrac12$ for a nonlinear one ($\mathrm H_2\mathrm
+O$); each active vibrational mode counts twice (kinetic $+$ potential). Hence
+$c_v=\tfrac{f}{2}k_B$ over $f$ active quadratic freedoms, $c_p=c_v+k_B$, and the
+monatomic ratio $c_p/R=\tfrac52$ is replaced by $c_p/R=\tfrac{f}{2}+1$.
+
+Crucially, the \emph{functional form} of the entropy is unchanged. Whenever
+$c_p$ is constant---all active modes classical, none freezing in or out over the
+range of interest---integrating the thermodynamic identity
+$\dd s=c_p\,\dd T/T-R\,\dd p/p$ (derived independently from the first and second
+laws in \S\ref{sec:classical}) gives
+\begin{equation}\label{eq:idealSgen}
+s=c_p\ln T-R\ln p+\mathrm{const}
+\end{equation}
+for \emph{any} ideal gas, with the material $c_p$. Sackur--Tetrode is just the
+monatomic special case that additionally fixes the absolute constant. For the
+atmosphere ($\approx\!200$--$320\K$) the diatomic rotational modes are fully
+excited while the stiff vibrational modes are largely frozen, so $\cpd$ and
+$\cpv$ (Table~\ref{tab:const}) are very nearly temperature-independent and
+\eqref{eq:idealSgen} holds to high accuracy; the small residual $c_p(T)$
+variation is absorbed into the effective constants and, for water, into the
+$\cl$ tuning of Remark~\ref{rem:modcl}.
+
+\begin{remark}[what the additive constant hides, and why it does not matter]
+The reference constant in \eqref{eq:idealS}/\eqref{eq:idealSgen} absorbs
+$\Lambda$, the Sackur--Tetrode $\tfrac52$, the internal-mode ground states, and
+each species' zero of energy. Because the ascent conserves a \emph{difference}
+of entropies at fixed composition (\S\ref{sec:conservation}) and buoyancy
+depends on temperature \emph{differences} (\S\ref{sec:adiabat}), these constants
+never enter a physical prediction; the code is free to drop them, and does.
+\end{remark}
+
 \subsection{The bridge to \texorpdfstring{$S(E)$}{S(E)}: Laplace, Legendre, and
 why \texorpdfstring{$Z$}{Z} is the elegant object}\label{ssec:bridge}
 
-Two objects describe the same equilibrium: the microcanonical entropy $S(E)$
----geometric and primary, the logarithm of the phase-space volume at fixed
-energy---and the canonical $Z(\beta)$ just used. Making the link exact explains
+The canonical machinery has now done real work---$Z$, differentiated twice,
+produced Sackur--Tetrode and the whole family
+\eqref{eq:idealSgen}---so this is the right moment to step back and ask how it
+relates to the older, more geometric foundation: the microcanonical entropy
+$S(E)$, the logarithm of the phase-space volume at fixed
+energy. Making the link exact explains
 both why they agree and why the $Z$ side carried every derivation above so much
 more lightly than the reservoir bookkeeping of \S\ref{ssec:boltzdist} did.
 
@@ -968,167 +1251,9 @@ right only in the limit: they are one Laplace pair, made \emph{operationally}
 interchangeable by the $1/\sqrt N$ and $N_S/N_B$ separations, and distinguishable
 again the moment those separations close.
 
-Having set $Z$ against its microcanonical shadow, we return to the object
-everything hinges on: the single-particle $z$.
+Having set $Z$ against its microcanonical shadow, we can cash the whole
+construction out for the parcel: the building block below.
 
-\subsection{The translational partition function and the thermal de~Broglie wavelength}
-\label{ssec:lambda}
-
-For a structureless particle in a box of volume $V$ the energy is purely
-kinetic, $\varepsilon=\mathbf p^{2}/2m$. In the classical (dilute,
-non-degenerate) regime the sum over single-particle states becomes a
-phase-space integral with one state per volume $h^{3}$ of phase space:
-\begin{equation}\label{eq:ztrans1}
-z_{\mathrm{tr}}=\frac{1}{h^{3}}\int_V\!\dd^{3}r\int_{\mathbb R^3}\!\dd^{3}p\;
-e^{-\beta \mathbf p^{2}/2m}
-=\frac{V}{h^{3}}\prod_{i=x,y,z}\int_{-\infty}^{\infty}\!\dd p_i\,
-e^{-\beta p_i^{2}/2m}.
-\end{equation}
-Each of the three Gaussian integrals evaluates to
-$\int_{-\infty}^{\infty}e^{-\beta p^{2}/2m}\dd p=\sqrt{2\pi m/\beta}
-=\sqrt{2\pi m k_BT}$, so
-\begin{equation}\label{eq:ztrans2}
-z_{\mathrm{tr}}=\frac{V\,(2\pi m k_BT)^{3/2}}{h^{3}}\equiv\frac{V}{\Lambda^{3}},
-\qquad
-\boxed{\;\Lambda\equiv\frac{h}{\sqrt{2\pi m k_BT}}\;}
-\end{equation}
-The length $\Lambda$ is the \emph{thermal de~Broglie wavelength}: the quantum
-coherence scale of a particle with thermal momentum
-$\sim\!\sqrt{m k_BT}$. It carries the entire temperature dependence of
-$z_{\mathrm{tr}}$, as $\Lambda^{3}\propto T^{-3/2}$. The classical treatment
-\eqref{eq:ZN}--\eqref{eq:ztrans1} is valid precisely when $n\Lambda^{3}\ll1$
-(mean spacing $\gg$ coherence length); for air at surface conditions
-$n\Lambda^{3}\sim10^{-6}$, so the approximation is excellent.
-
-\subsection{Free energy and the Sackur--Tetrode entropy}\label{ssec:sackur}
-
-Take a monatomic gas first, $z=z_{\mathrm{tr}}=V/\Lambda^{3}$ (no internal
-structure). From \eqref{eq:ZN}, $\ln Z_N=N\ln z-\ln N!$, and with Stirling's
-approximation $\ln N!\simeq N\ln N-N$,
-\begin{equation}\label{eq:Fmon}
-F=-k_BT\ln Z_N
-=-N k_BT\Big[\ln\frac{z}{N}+1\Big]
-=-N k_BT\Big[\ln\frac{V}{N\Lambda^{3}}+1\Big].
-\end{equation}
-The entropy follows from \eqref{eq:SfromF}. Writing
-$\ln(V/N\Lambda^{3})=\ln(V/N)+\tfrac32\ln T+C_0$ with
-$C_0=\tfrac32\ln(2\pi m k_B/h^{2})$ temperature-independent, only the
-$\tfrac32\ln T$ piece and the explicit prefactor $T$ depend on temperature:
-\begin{align}
-S=-\frac{\partial F}{\partial T}
-&=N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+1\Big]
- +N k_BT\cdot\frac{3}{2T} \notag\\
-&=N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+\underbrace{1}_{\text{from }F}
-      +\underbrace{\tfrac32}_{\partial_T(\tfrac32 T\ln T)}\Big]
- =N k_B\Big[\ln\frac{V}{N\Lambda^{3}}+\frac{5}{2}\Big].
-\label{eq:sackur}
-\end{align}
-This is the \emph{Sackur--Tetrode} equation. Its additive $\tfrac52$ has a
-definite provenance: $1$ from the indistinguishability remainder (the $+1$ in
-$F$, i.e.\ the $-\ln N!$ Stirling term) and $\tfrac32$ from differentiating the
-thermal energy $\tfrac32 N k_BT$. Physically the two variable terms are the
-split we will track to the end: $\ln(V/N)$ is \emph{configurational} (positional
-microstates---more room per particle, more states), and
-$-3\ln\Lambda=\tfrac32\ln T+\mathrm{const}$ is \emph{thermal} (the momentum
-distribution broadens with $T$).
-
-\subsection{Intensive form, and the fate of the two \texorpdfstring{$5/2$}{5/2}'s}
-\label{ssec:intensive}
-
-Reduce \eqref{eq:sackur} to a specific entropy. Per particle, in units of
-$k_B$,
-\begin{equation}\label{eq:sperparticle}
-\tilde s\equiv\frac{S}{N k_B}=\ln\frac{V}{N\Lambda^{3}}+\frac52 .
-\end{equation}
-Use the ideal-gas law in the form $V/N=k_BT/p$ and
-$\Lambda^{-3}=(2\pi m k_B/h^{2})^{3/2}T^{3/2}$:
-\begin{align}
-\ln\frac{V}{N\Lambda^{3}}
-&=\ln\frac{k_BT}{p}+\frac32\ln T+C_0
- =\underbrace{\ln T}_{\text{from }V/N}\;-\;\ln p\;+\;
-   \underbrace{\tfrac32\ln T}_{\text{from }\Lambda^{-3}}\;+\;C_1 \notag\\
-&=\frac52\ln T-\ln p+C_1 ,\qquad C_1=\ln k_B+C_0 .
-\label{eq:lnVNL}
-\end{align}
-Substituting into \eqref{eq:sperparticle},
-\begin{equation}\label{eq:monatomic}
-\tilde s=\frac52\ln T-\ln p+\Big(C_1+\frac52\Big)
-        =\underbrace{\frac52}_{=\,c_p/R}\ln T-\ln p+\mathrm{const}.
-\end{equation}
-There are \emph{two} factors of $5/2$ here and they behave oppositely---this is
-the crux:
-\begin{itemize}
-\item The \textbf{additive} $\tfrac52$ inherited from Sackur--Tetrode
-      \eqref{eq:sperparticle} is a pure constant. It is swallowed into the
-      reference constant in \eqref{eq:monatomic} and cancels in every entropy
-      \emph{difference}. So yes---it drops out of anything physical; it survives
-      only in the absolute, third-law-anchored entropy.
-\item The \textbf{coefficient} $\tfrac52$ multiplying $\ln T$ is not a constant
-      and does \emph{not} drop out. Equation~\eqref{eq:lnVNL} shows it is
-      assembled as $1+\tfrac32$: one power of $\ln T$ from the configurational
-      $\ln(V/N)=\ln(k_BT/p)$, and $\tfrac32$ from the thermal
-      $\Lambda^{-3}\!\propto T^{3/2}$. For a monatomic gas this equals $c_p/R$.
-\end{itemize}
-Multiplying \eqref{eq:monatomic} by the specific gas constant $R=k_B/m$ (mass
-$m$ per particle) turns $\tilde s$ into entropy per unit mass, and
-$\tfrac52 R=c_p$ for a monatomic gas, giving the building block
-\begin{equation}\label{eq:idealS}
-\boxed{\;s \;=\; c_p\ln T - R\ln p + \mathrm{const}.\;}
-\end{equation}
-
-\subsection{Beyond monatomic: internal degrees of freedom}\label{ssec:polyatomic}
-
-Sackur--Tetrode as derived assumes a structureless particle, so
-\eqref{eq:sackur} does \emph{not} apply verbatim to air ($\mathrm N_2,\mathrm
-O_2$) or water vapour ($\mathrm H_2\mathrm O$), which rotate and vibrate. Two
-things change, both controlled. First, the single-particle energy is a sum
-$\varepsilon=\varepsilon_{\mathrm{tr}}+\varepsilon_{\mathrm{int}}$
-(translation plus rotation, vibration, electronic), so the partition function
-\emph{factorises},
-\begin{equation}\label{eq:zfactor}
-z=z_{\mathrm{tr}}(T,V)\,z_{\mathrm{int}}(T),
-\end{equation}
-with the internal factor a function of $T$ alone (the internal level spacings do
-not depend on the box). Second, carrying $z_{\mathrm{int}}$ through
-\eqref{eq:Fmon}--\eqref{eq:sackur} adds an internal energy
-$u_{\mathrm{int}}=k_BT^{2}\,\dd\ln z_{\mathrm{int}}/\dd T$ per particle and a
-matching internal entropy; the extra heat capacity is
-$c_{v,\mathrm{int}}=\dd u_{\mathrm{int}}/\dd T$.
-
-The \textbf{equipartition theorem} makes this concrete: every quadratic degree
-of freedom that is thermally active contributes $\tfrac12 k_B$ to the
-per-particle heat capacity. Translation always gives $3\times\tfrac12$;
-rotation adds $2\times\tfrac12$ for a linear molecule ($\mathrm N_2,\mathrm
-O_2,\mathrm{CO}_2$) or $3\times\tfrac12$ for a nonlinear one ($\mathrm H_2\mathrm
-O$); each active vibrational mode counts twice (kinetic $+$ potential). Hence
-$c_v=\tfrac{f}{2}k_B$ over $f$ active quadratic freedoms, $c_p=c_v+k_B$, and the
-monatomic ratio $c_p/R=\tfrac52$ is replaced by $c_p/R=\tfrac{f}{2}+1$.
-
-Crucially, the \emph{functional form} of the entropy is unchanged. Whenever
-$c_p$ is constant---all active modes classical, none freezing in or out over the
-range of interest---integrating the thermodynamic identity
-$\dd s=c_p\,\dd T/T-R\,\dd p/p$ (derived independently from the first and second
-laws in \S\ref{sec:classical}) gives
-\begin{equation}\label{eq:idealSgen}
-s=c_p\ln T-R\ln p+\mathrm{const}
-\end{equation}
-for \emph{any} ideal gas, with the material $c_p$. Sackur--Tetrode is just the
-monatomic special case that additionally fixes the absolute constant. For the
-atmosphere ($\approx\!200$--$320\K$) the diatomic rotational modes are fully
-excited while the stiff vibrational modes are largely frozen, so $\cpd$ and
-$\cpv$ (Table~\ref{tab:const}) are very nearly temperature-independent and
-\eqref{eq:idealSgen} holds to high accuracy; the small residual $c_p(T)$
-variation is absorbed into the effective constants and, for water, into the
-$\cl$ tuning of Remark~\ref{rem:modcl}.
-
-\begin{remark}[what the additive constant hides, and why it does not matter]
-The reference constant in \eqref{eq:idealS}/\eqref{eq:idealSgen} absorbs
-$\Lambda$, the Sackur--Tetrode $\tfrac52$, the internal-mode ground states, and
-each species' zero of energy. Because the ascent conserves a \emph{difference}
-of entropies at fixed composition (\S\ref{sec:conservation}) and buoyancy
-depends on temperature \emph{differences} (\S\ref{sec:adiabat}), these constants
-never enter a physical prediction; the code is free to drop them, and does.
-\end{remark}
 
 \subsection{The building block, and how it feeds everything below}
 \label{ssec:buildingblock}
@@ -1603,7 +1728,11 @@ The chain is now complete and first-principled at every link:
       $n$ oscillators---with the equal-\emph{a-priori} postulate demoted to a
       concentration-of-measure theorem, its exceptional states identified, and
       the separate (dynamical) status of ergodicity flagged
-      (\S\ref{ssec:typicality}).
+      (\S\ref{ssec:typicality}). Nor was the flat prior itself load-bearing:
+      any weighting whose bath-conditioned tilt is $\ll\beta$ gives the same
+      physics, sorting all priors into a four-tier gauge hierarchy whose only
+      dangerous member is a tilt conjugate to an observable in play
+      (\S\ref{ssec:priorclass}).
 \item The microcanonical $S(E)$ and canonical $Z(\beta)$ are Laplace duals
       whose thermodynamic-limit shadow is the Legendre transform; hard
       (fixed-$E$) and soft (fixed-$\beta$) constraints are operationally
